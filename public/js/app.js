@@ -780,7 +780,7 @@ function reasonsHtml(reasons) {
 
 // Shop = browse the Cross Roast range AND add what you ordered.
 // Tap a coffee → details. Tap the circle → select it; a bar appears to add the selection to an order.
-let pick = { picked: new Set(), links: new Map(), dest: 'new', fixed: null };
+let pick = { picked: new Set(), dest: 'new', fixed: null };
 
 function destPicker() {
   const latest = latestOrder();
@@ -796,7 +796,7 @@ function destPicker() {
 
 function viewShop() {
   const fixed = query().get('order');
-  pick = { picked: new Set(), links: new Map(), dest: fixed || defaultDest(), fixed };
+  pick = { picked: new Set(), dest: fixed || defaultDest(), fixed };
   const nScored = scoredCoffees(db.coffees, 'group', people()).length;
   $view.innerHTML = `
     <div class="top"><div><div class="eyebrow">Cross Roast</div><h1>Shop</h1></div><button class="btn sm ghost" id="reload">Refresh</button></div>
@@ -805,15 +805,6 @@ function viewShop() {
     <div class="small muted" style="margin:2px 2px 0">Tap a coffee for details · tap <span class="mini-check"></span> to add it to an order</div>
     ${nScored < 3 ? `<div class="card notice" style="margin-top:10px">Score ${3 - nScored} more coffee${3 - nScored === 1 ? '' : 's'} to see how much you’ll probably like each one.</div>` : ''}
     <div id="catalog" class="list"></div>
-    <details class="card pad" style="margin:16px 0 0" id="linkBox">
-      <summary class="small" style="font-weight:700;cursor:pointer">Not in the shop anymore? Paste a link</summary>
-      <div class="paste-box" style="margin-top:12px">
-        <input class="input" id="link" type="url" inputmode="url" placeholder="https://www.crossroast.be/product/…" autocomplete="off">
-        <button class="btn soft" id="pasteBtn" aria-label="Paste">${ICON.paste}</button>
-      </div>
-      <div id="results" class="stack" style="margin-top:12px"></div>
-      <p class="small muted" style="margin:10px 0 0">No link at all? <a class="linkish" href="#/edit/new">Enter a coffee manually</a></p>
-    </details>
     <div id="barSpace"></div>
     <div class="pick-bar hidden" id="actions">${destPicker()}<button class="btn primary block" id="addBtn">Add</button></div>`;
   bindShopTabs();
@@ -844,46 +835,11 @@ function viewShop() {
     location.hash = pick.fixed ? `#/order/${orderId}` : '#/';
   });
 
-  // link fallback
-  const $results = $view.querySelector('#results');
-  const drawLinks = () => {
-    $results.innerHTML = [...pick.links.values()].map((it) => {
-      if (it.status === 'loading') return `<div class="card preview"><div class="spinner"></div><div class="grow status-line">Reading ${esc(it.slug)}…</div></div>`;
-      if (it.status === 'error') return `<div class="card preview"><div class="grow"><div class="error">${esc(it.slug)}: ${esc(it.error)}</div>
-        <a class="linkish small" href="#/edit/new?url=${encodeURIComponent('https://www.crossroast.be/product/' + it.slug + '/')}">Enter manually instead</a></div></div>`;
-      const c = it.coffee, ex = store.findBySlug(c.slug);
-      return `<div class="card preview">${coffeeImg(c)}<div class="grow">${nameHtml(c)}<div class="small muted">${esc(procLine(c))}</div>
-          <div class="small muted" style="margin-top:6px">${ex ? 'Tasted before: it will be added to the order again.' : 'Selected: add it with the button below.'}</div></div></div>`;
-    }).join('');
-    updateBar();
-  };
-  const handle = (text) => {
-    const slugs = findLinks(text);
-    if (!slugs.length) { if (text.trim()) $results.innerHTML = `<div class="error">That doesn't look like a crossroast.be product link.</div>`; return; }
-    for (const slug of slugs) {
-      if (pick.links.has(slug)) continue;
-      pick.links.set(slug, { slug, status: 'loading' });
-      fetchProduct(slug)
-        .then((coffee) => pick.links.set(slug, { slug, status: 'ok', coffee }))
-        .catch((e) => pick.links.set(slug, { slug, status: 'error', error: e.message || 'Could not read this page.' }))
-        .finally(drawLinks);
-    }
-    drawLinks();
-  };
-  const $link = $view.querySelector('#link');
-  $link.addEventListener('input', () => handle($link.value));
-  $view.querySelector('#pasteBtn').addEventListener('click', async () => {
-    try { const t = await navigator.clipboard.readText(); $link.value = t.trim(); handle(t); }
-    catch { $link.focus(); toast('Long-press the field to paste'); }
-  });
-
   if (shopState.items) drawCatalog(); else loadCatalog(false);
 }
 
 function chosen() {
-  const fromShop = (shopState.items || []).filter((c) => pick.picked.has(c.slug));
-  const fromLinks = [...pick.links.values()].filter((i) => i.status === 'ok' && !pick.picked.has(i.coffee.slug)).map((i) => i.coffee);
-  return [...fromShop, ...fromLinks];
+  return (shopState.items || []).filter((c) => pick.picked.has(c.slug));
 }
 function updateBar() {
   const $a = document.getElementById('actions');
@@ -898,7 +854,7 @@ async function loadCatalog(force) {
   shopState.loading = true; shopState.error = null;
   drawCatalog();
   try { shopState.items = await fetchCatalog(force); if (force) toast('Shop refreshed'); }
-  catch (e) { shopState.error = e.message || 'Could not load the shop.'; $view.querySelector('#linkBox')?.setAttribute('open', ''); }
+  catch (e) { shopState.error = e.message || 'Could not load the shop.'; }
   shopState.loading = false;
   drawCatalog();
 }
@@ -907,7 +863,7 @@ function drawCatalog() {
   const $c = document.getElementById('catalog');
   if (!$c) return;
   if (shopState.loading && !shopState.items) { $c.innerHTML = `<div class="card preview"><div class="spinner"></div><div class="status-line">Loading the Cross Roast shop…</div></div>`; return; }
-  if (shopState.error && !shopState.items) { $c.innerHTML = `<div class="error">${esc(shopState.error)} You can still paste a link below.</div>`; return; }
+  if (shopState.error && !shopState.items) { $c.innerHTML = `<div class="error">${esc(shopState.error)} Check your connection and tap Refresh.</div>`; return; }
   const ps = people();
   let rows = (shopState.items || [])
     .filter((c) => c.inStock !== false && matchesQuery(c, shopState.q) && passes(c, shopState))
