@@ -1,0 +1,10 @@
+{
+  "name": "brew-crew",
+  "private": true,
+  "type": "module",
+  "description": "Brew Crew – coffee tasting tracker for Cross Roast coffees",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "dev": "node tools/dev-server.mjs"
+  }
+}
