@@ -167,7 +167,7 @@ const resolveDest = (dest) => (dest === 'new' ? store.createOrder().id : dest);
 // ================================================================ router
 const routes = [
   [/^#?\/?$/, viewCoffees, 'coffees'],
-  [/^#\/add$/, viewAdd, 'add'],
+  [/^#\/add$/, () => location.replace('#/shop'), 'shop'],
   [/^#\/coffee\/([\w-]+)$/, viewCoffee, 'coffees'],
   [/^#\/edit\/([\w-]+)$/, viewEdit, 'coffees'],
   [/^#\/taste$/, viewTaste, 'taste'],
@@ -204,8 +204,8 @@ function viewCoffees() {
       <div class="top"><div><div class="eyebrow">${esc(people().map((p) => p.name).join(' · '))}</div><h1>Brew Crew</h1></div></div>
       <div class="card empty">
         <h2>No coffees yet</h2>
-        <p>Tap ＋, pick the coffees you ordered from the Cross Roast shop, and each of you gives a score.</p>
-        <a class="btn primary" href="#/add">Add your first coffees</a>
+        <p>Open the Shop, tick the coffees you ordered, and each of you gives a score.</p>
+        <a class="btn primary" href="#/shop">Go to the shop</a>
         <p class="small" style="margin-top:18px">Just want to look around? <a class="linkish" href="#/settings">Load demo data</a></p>
       </div>`;
     return;
@@ -316,136 +316,6 @@ function bindSwipe($list, onDelete) {
       openCard = null;
     }
   }, true);
-}
-
-// ================================================================ add
-const addState = { q: '', type: null, region: null };
-
-function destPicker(dest, fixed) {
-  const latest = latestOrder();
-  if (fixed) return `<div class="dest">Adding to ${esc(orderName(store.getOrder(fixed)))}</div>`;
-  if (!latest) return `<div class="dest">Starts a new order · today</div>`;
-  const n = store.orderCoffees(latest.id).length;
-  return `<div class="dest">Add to</div>
-    <div class="seg small" style="margin-bottom:10px">
-      <button data-d="${latest.id}" class="${dest === latest.id ? 'on' : ''}">${esc(orderName(latest))} (${n})</button>
-      <button data-d="new" class="${dest === 'new' ? 'on' : ''}">New order</button>
-    </div>`;
-}
-
-function viewAdd() {
-  const fixed = query().get('order');
-  const state = { picked: new Set(), links: new Map(), dest: fixed || defaultDest() };
-  $view.innerHTML = `
-    <div class="top"><div><div class="eyebrow">New coffees</div><h1>What did you order?</h1><div class="sub">Tap the coffees from the Cross Roast shop</div></div></div>
-    ${searchBar(addState, 'Search the shop…', ['region', 'type'])}
-    <div id="shopPick" class="list" style="margin-top:6px"></div>
-    <details class="card pad" style="margin:16px 0 150px" id="linkBox">
-      <summary class="small" style="font-weight:700;cursor:pointer">Not in the shop anymore? Paste a link</summary>
-      <div class="paste-box" style="margin-top:12px">
-        <input class="input" id="link" type="url" inputmode="url" placeholder="https://www.crossroast.be/product/…" autocomplete="off">
-        <button class="btn soft" id="pasteBtn" aria-label="Paste">${ICON.paste}</button>
-      </div>
-      <div id="results" class="stack" style="margin-top:12px"></div>
-      <p class="small muted" style="margin:10px 0 0">No link at all? <a class="linkish" href="#/edit/new">Enter a coffee manually</a></p>
-    </details>
-    <div class="pick-bar hidden" id="actions">${destPicker(state.dest, fixed)}<button class="btn primary block" id="addBtn">Add</button></div>`;
-  const $pick = $view.querySelector('#shopPick');
-  const $results = $view.querySelector('#results');
-  const $actions = $view.querySelector('#actions');
-  const $addBtn = $view.querySelector('#addBtn');
-  let catalog = null;
-
-  const chosen = () => {
-    const fromShop = (catalog || []).filter((c) => state.picked.has(c.slug));
-    const fromLinks = [...state.links.values()].filter((i) => i.status === 'ok' && !state.picked.has(i.coffee.slug)).map((i) => i.coffee);
-    return [...fromShop, ...fromLinks];
-  };
-  const updateBar = () => {
-    const n = chosen().length;
-    $actions.classList.toggle('hidden', !n);
-    $addBtn.textContent = n > 1 ? `Add ${n} coffees` : 'Add coffee';
-  };
-  $actions.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-d]');
-    if (!b) return;
-    state.dest = b.dataset.d;
-    $actions.querySelectorAll('[data-d]').forEach((x) => x.classList.toggle('on', x === b));
-  });
-
-  const drawShop = () => {
-    if (!catalog) return;
-    const rows = catalog
-      .filter((c) => c.inStock !== false && matchesQuery(c, addState.q) && passes(c, addState))
-      .map((c) => ({ c, ex: store.findBySlug(c.slug) }))
-      .sort((a, b) => (a.ex ? 1 : 0) - (b.ex ? 1 : 0));
-    $pick.innerHTML = rows.map(({ c, ex }) => {
-      const on = state.picked.has(c.slug);
-      const g = ex ? groupScore(ex, people()) : null;
-      const last = ex ? store.coffeeOrders(ex)[0] : null;
-      return `<button class="card item pick ${on ? 'on' : ''}" data-slug="${esc(c.slug)}">${coffeeImg(c)}<div class="grow">${nameHtml(c)}
-          <div class="meta">${esc(procLine(c))}</div>
-          ${ex ? `<div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap">${verdictTag(g)}<span class="small muted">${g != null ? `scored ${fmt(g)}` : 'tasted'}${last ? ` · last ordered ${esc(dateLabel(last.date))}` : ''}</span></div>`
-               : `<div class="meta" style="color:var(--ink-2)">${esc(c.notes.join(' · '))}</div>`}</div>
-          <span class="check" aria-hidden="true"></span></button>`;
-    }).join('') || '<div class="small muted">Nothing matches.</div>';
-  };
-
-  $pick.innerHTML = `<div class="card preview"><div class="spinner"></div><div class="status-line">Loading the Cross Roast shop…</div></div>`;
-  fetchCatalog()
-    .then((items) => { catalog = items; shopState.items = items; drawShop(); })
-    .catch(() => { $pick.innerHTML = `<div class="error">Could not load the shop. Paste a link below instead.</div>`; $view.querySelector('#linkBox').open = true; });
-
-  $pick.addEventListener('click', (e) => {
-    const b = e.target.closest('button[data-slug]');
-    if (!b) return;
-    const s = b.dataset.slug;
-    state.picked.has(s) ? state.picked.delete(s) : state.picked.add(s);
-    b.classList.toggle('on', state.picked.has(s));
-    updateBar();
-  });
-  bindSearch(addState, ['region', 'type'], drawShop);
-
-  // link fallback
-  const drawLinks = () => {
-    $results.innerHTML = [...state.links.values()].map((it) => {
-      if (it.status === 'loading') return `<div class="card preview"><div class="spinner"></div><div class="grow status-line">Reading ${esc(it.slug)}…</div></div>`;
-      if (it.status === 'error') return `<div class="card preview"><div class="grow"><div class="error">${esc(it.slug)}: ${esc(it.error)}</div>
-        <a class="linkish small" href="#/edit/new?url=${encodeURIComponent('https://www.crossroast.be/product/' + it.slug + '/')}">Enter manually instead</a></div></div>`;
-      const c = it.coffee, ex = store.findBySlug(c.slug);
-      return `<div class="card preview">${coffeeImg(c)}<div class="grow">${nameHtml(c)}<div class="small muted">${esc(procLine(c))}</div>
-          ${ex ? `<div class="small muted" style="margin-top:6px">Tasted before: it will be added to this order again.</div>` : ''}</div></div>`;
-    }).join('');
-    updateBar();
-  };
-  const handle = (text) => {
-    const slugs = findLinks(text);
-    if (!slugs.length) { if (text.trim()) $results.innerHTML = `<div class="error">That doesn't look like a crossroast.be product link.</div>`; return; }
-    for (const slug of slugs) {
-      if (state.links.has(slug)) continue;
-      state.links.set(slug, { slug, status: 'loading' });
-      fetchProduct(slug)
-        .then((coffee) => state.links.set(slug, { slug, status: 'ok', coffee }))
-        .catch((e) => state.links.set(slug, { slug, status: 'error', error: e.message || 'Could not read this page.' }))
-        .finally(drawLinks);
-    }
-    drawLinks();
-  };
-  const $link = $view.querySelector('#link');
-  $link.addEventListener('input', () => handle($link.value));
-  $view.querySelector('#pasteBtn').addEventListener('click', async () => {
-    try { const t = await navigator.clipboard.readText(); $link.value = t.trim(); handle(t); }
-    catch { $link.focus(); toast('Long-press the field to paste'); }
-  });
-
-  $addBtn.addEventListener('click', () => {
-    const list = chosen();
-    if (!list.length) return;
-    const orderId = resolveDest(state.dest);
-    const added = list.map((c) => store.addCoffee(c, orderId).coffee);
-    toast(added.length > 1 ? `${added.length} coffees added` : `${added[0].name} added`);
-    location.hash = '#/';
-  });
 }
 
 // ================================================================ rating bar
@@ -908,25 +778,127 @@ function reasonsHtml(reasons) {
   return `<ul class="reasons">${reasons.slice(0, 4).map((r) => `<li class="${r.delta > 0 ? 'up' : 'down'}">${r.delta > 0 ? '▲' : '▼'} ${esc(describeReason(r))}</li>`).join('')}</ul>`;
 }
 
+// Shop = browse the Cross Roast range AND add what you ordered.
+// Tap a coffee → details. Tap the circle → select it; a bar appears to add the selection to an order.
+let pick = { picked: new Set(), links: new Map(), dest: 'new', fixed: null };
+
+function destPicker() {
+  const latest = latestOrder();
+  if (pick.fixed) return `<div class="dest">Adding to ${esc(orderName(store.getOrder(pick.fixed)))}</div>`;
+  if (!latest) return `<div class="dest">Starts a new order · today</div>`;
+  const n = store.orderCoffees(latest.id).length;
+  return `<div class="dest">Add to</div>
+    <div class="seg small" style="margin-bottom:10px">
+      <button data-d="${latest.id}" class="${pick.dest === latest.id ? 'on' : ''}">${esc(orderName(latest))} (${n})</button>
+      <button data-d="new" class="${pick.dest === 'new' ? 'on' : ''}">New order</button>
+    </div>`;
+}
+
 function viewShop() {
+  const fixed = query().get('order');
+  pick = { picked: new Set(), links: new Map(), dest: fixed || defaultDest(), fixed };
   const nScored = scoredCoffees(db.coffees, 'group', people()).length;
   $view.innerHTML = `
     <div class="top"><div><div class="eyebrow">Cross Roast</div><h1>Shop</h1></div><button class="btn sm ghost" id="reload">Refresh</button></div>
     ${shopTabs('shop')}
     ${searchBar(shopState, 'Search the shop…', ['hide', 'region', 'type'])}
+    <div class="small muted" style="margin:2px 2px 0">Tap a coffee for details · tap <span class="mini-check"></span> to add it to an order</div>
     ${nScored < 3 ? `<div class="card notice" style="margin-top:10px">Score ${3 - nScored} more coffee${3 - nScored === 1 ? '' : 's'} to see how much you’ll probably like each one.</div>` : ''}
-    <div id="catalog" class="list"></div>`;
+    <div id="catalog" class="list"></div>
+    <details class="card pad" style="margin:16px 0 0" id="linkBox">
+      <summary class="small" style="font-weight:700;cursor:pointer">Not in the shop anymore? Paste a link</summary>
+      <div class="paste-box" style="margin-top:12px">
+        <input class="input" id="link" type="url" inputmode="url" placeholder="https://www.crossroast.be/product/…" autocomplete="off">
+        <button class="btn soft" id="pasteBtn" aria-label="Paste">${ICON.paste}</button>
+      </div>
+      <div id="results" class="stack" style="margin-top:12px"></div>
+      <p class="small muted" style="margin:10px 0 0">No link at all? <a class="linkish" href="#/edit/new">Enter a coffee manually</a></p>
+    </details>
+    <div id="barSpace"></div>
+    <div class="pick-bar hidden" id="actions">${destPicker()}<button class="btn primary block" id="addBtn">Add</button></div>`;
   bindShopTabs();
   $view.querySelector('#reload').addEventListener('click', () => loadCatalog(true));
   bindSearch(shopState, ['hide', 'region', 'type'], drawCatalog);
+
+  $view.querySelector('#catalog').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-pick]');
+    if (!b) return;
+    e.preventDefault();
+    const s = b.dataset.pick;
+    pick.picked.has(s) ? pick.picked.delete(s) : pick.picked.add(s);
+    b.closest('.match').classList.toggle('on', pick.picked.has(s));
+    updateBar();
+  });
+  $view.querySelector('#actions').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-d]');
+    if (!b) return;
+    pick.dest = b.dataset.d;
+    $view.querySelectorAll('#actions [data-d]').forEach((x) => x.classList.toggle('on', x === b));
+  });
+  $view.querySelector('#addBtn').addEventListener('click', () => {
+    const list = chosen();
+    if (!list.length) return;
+    const orderId = resolveDest(pick.dest);
+    list.forEach((c) => store.addCoffee(c, orderId));
+    toast(list.length > 1 ? `${list.length} coffees added` : `${list[0].name} added`);
+    location.hash = pick.fixed ? `#/order/${orderId}` : '#/';
+  });
+
+  // link fallback
+  const $results = $view.querySelector('#results');
+  const drawLinks = () => {
+    $results.innerHTML = [...pick.links.values()].map((it) => {
+      if (it.status === 'loading') return `<div class="card preview"><div class="spinner"></div><div class="grow status-line">Reading ${esc(it.slug)}…</div></div>`;
+      if (it.status === 'error') return `<div class="card preview"><div class="grow"><div class="error">${esc(it.slug)}: ${esc(it.error)}</div>
+        <a class="linkish small" href="#/edit/new?url=${encodeURIComponent('https://www.crossroast.be/product/' + it.slug + '/')}">Enter manually instead</a></div></div>`;
+      const c = it.coffee, ex = store.findBySlug(c.slug);
+      return `<div class="card preview">${coffeeImg(c)}<div class="grow">${nameHtml(c)}<div class="small muted">${esc(procLine(c))}</div>
+          <div class="small muted" style="margin-top:6px">${ex ? 'Tasted before: it will be added to the order again.' : 'Selected: add it with the button below.'}</div></div></div>`;
+    }).join('');
+    updateBar();
+  };
+  const handle = (text) => {
+    const slugs = findLinks(text);
+    if (!slugs.length) { if (text.trim()) $results.innerHTML = `<div class="error">That doesn't look like a crossroast.be product link.</div>`; return; }
+    for (const slug of slugs) {
+      if (pick.links.has(slug)) continue;
+      pick.links.set(slug, { slug, status: 'loading' });
+      fetchProduct(slug)
+        .then((coffee) => pick.links.set(slug, { slug, status: 'ok', coffee }))
+        .catch((e) => pick.links.set(slug, { slug, status: 'error', error: e.message || 'Could not read this page.' }))
+        .finally(drawLinks);
+    }
+    drawLinks();
+  };
+  const $link = $view.querySelector('#link');
+  $link.addEventListener('input', () => handle($link.value));
+  $view.querySelector('#pasteBtn').addEventListener('click', async () => {
+    try { const t = await navigator.clipboard.readText(); $link.value = t.trim(); handle(t); }
+    catch { $link.focus(); toast('Long-press the field to paste'); }
+  });
+
   if (shopState.items) drawCatalog(); else loadCatalog(false);
+}
+
+function chosen() {
+  const fromShop = (shopState.items || []).filter((c) => pick.picked.has(c.slug));
+  const fromLinks = [...pick.links.values()].filter((i) => i.status === 'ok' && !pick.picked.has(i.coffee.slug)).map((i) => i.coffee);
+  return [...fromShop, ...fromLinks];
+}
+function updateBar() {
+  const $a = document.getElementById('actions');
+  if (!$a) return;
+  const n = chosen().length;
+  $a.classList.toggle('hidden', !n);
+  document.getElementById('barSpace').style.height = n ? '150px' : '0';
+  document.getElementById('addBtn').textContent = n > 1 ? `Add ${n} coffees` : 'Add 1 coffee';
 }
 
 async function loadCatalog(force) {
   shopState.loading = true; shopState.error = null;
   drawCatalog();
   try { shopState.items = await fetchCatalog(force); if (force) toast('Shop refreshed'); }
-  catch (e) { shopState.error = e.message || 'Could not load the shop.'; }
+  catch (e) { shopState.error = e.message || 'Could not load the shop.'; $view.querySelector('#linkBox')?.setAttribute('open', ''); }
   shopState.loading = false;
   drawCatalog();
 }
@@ -935,7 +907,7 @@ function drawCatalog() {
   const $c = document.getElementById('catalog');
   if (!$c) return;
   if (shopState.loading && !shopState.items) { $c.innerHTML = `<div class="card preview"><div class="spinner"></div><div class="status-line">Loading the Cross Roast shop…</div></div>`; return; }
-  if (shopState.error && !shopState.items) { $c.innerHTML = `<div class="error">${esc(shopState.error)}</div>`; return; }
+  if (shopState.error && !shopState.items) { $c.innerHTML = `<div class="error">${esc(shopState.error)} You can still paste a link below.</div>`; return; }
   const ps = people();
   let rows = (shopState.items || [])
     .filter((c) => c.inStock !== false && matchesQuery(c, shopState.q) && passes(c, shopState))
@@ -947,17 +919,27 @@ function drawCatalog() {
     });
   if (shopState.hide === 'tasted') rows = rows.filter((r) => !r.tasted);
   rows.sort((a, b) => (b.val ?? -1) - (a.val ?? -1));
-  $c.innerHTML = rows.map(({ c, ex, val, pred, tasted }) => `
-    <a class="card match" href="${tasted ? `#/coffee/${ex.id}` : `#/shop/${esc(c.slug)}`}">
-      ${coffeeImg(c)}
-      <div class="grow">
-        ${nameHtml(c)}
-        <div class="small muted" style="margin-top:2px">${esc(procLine(c))}</div>
-        <div class="small" style="color:var(--ink-2);margin-top:2px">${esc(c.notes.join(' · '))}</div>
-        <div style="margin-top:6px">${tasted ? verdictTag(val) : (val != null && reasonsHtml(pred?.reasons?.slice(0, 2))) || '<span class="tag new">New for you</span>'}</div>
+  $c.innerHTML = rows.map(({ c, ex, val, pred, tasted }) => {
+    const last = tasted ? store.coffeeOrders(ex)[0] : null;
+    return `
+    <div class="card match ${pick.picked.has(c.slug) ? 'on' : ''}">
+      <a class="match-main" href="${tasted ? `#/coffee/${ex.id}` : `#/shop/${esc(c.slug)}`}">
+        ${coffeeImg(c)}
+        <div class="grow">
+          ${nameHtml(c)}
+          <div class="small muted" style="margin-top:2px">${esc(procLine(c))}</div>
+          <div class="small" style="color:var(--ink-2);margin-top:2px">${esc(c.notes.join(' · '))}</div>
+          <div style="margin-top:6px">${tasted
+            ? `<div class="row" style="gap:6px;flex-wrap:wrap">${verdictTag(val)}${last ? `<span class="small muted">last ordered ${esc(dateLabel(last.date))}</span>` : ''}</div>`
+            : (val != null && reasonsHtml(pred?.reasons?.slice(0, 2))) || '<span class="tag new">New for you</span>'}</div>
+        </div>
+      </a>
+      <div class="match-side">
+        ${tasted ? scoreBadge(val) : val == null ? '' : expectBadge(val)}
+        <button class="check-btn" data-pick="${esc(c.slug)}" aria-label="Select ${esc(c.name)}"></button>
       </div>
-      ${tasted ? scoreBadge(val) : val == null ? '' : expectBadge(val)}
-    </a>`).join('') || '<div class="small muted">No coffees found.</div>';
+    </div>`;
+  }).join('') || '<div class="small muted">No coffees found.</div>';
 }
 
 // In-app preview of a shop coffee that you haven't tasted yet.
@@ -1027,7 +1009,7 @@ function viewOrders() {
         <div class="row"><div class="grow"><b style="font:800 18px var(--display)">${esc(orderName(o))}</b><div class="small muted">${cs.length} coffee${cs.length === 1 ? '' : 's'} · ${scores.length} scored</div></div>${scoreBadge(avg)}</div>
         <div class="order-thumbs">${cs.slice(0, 6).map((c) => (c.thumb ? `<img src="${esc(c.thumb)}" alt="" loading="lazy">` : '<div class="ph"></div>')).join('')}</div>
       </a>`;
-    }).join('') : '<div class="card empty"><h2>No orders yet</h2><p>An order is created automatically when you add coffees with ＋.</p></div>'}</div>`;
+    }).join('') : '<div class="card empty"><h2>No orders yet</h2><p>Tick coffees in the Shop and add them: an order is created automatically.</p></div>'}</div>`;
   bindShopTabs();
 }
 
@@ -1041,7 +1023,7 @@ function viewOrder(id) {
     <h1>${esc(orderName(o))}</h1>
     <div class="row" style="margin:14px 0 4px;gap:8px">
       <input class="input" type="date" id="date" value="${esc(o.date)}" style="max-width:180px">
-      <a class="btn soft grow" href="#/add?order=${o.id}">+ Add coffees</a>
+      <a class="btn soft grow" href="#/shop?order=${o.id}">+ Add coffees</a>
     </div>
     <div class="list">${cs.map((c) => { const s = groupScore(c, people()); return `
       <a class="card item" href="#/coffee/${c.id}">${coffeeImg(c)}<div class="grow">${nameHtml(c)}

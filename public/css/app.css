@@ -387,3 +387,15 @@ button.item { width: 100%; text-align: left; font: inherit; color: inherit; }
 
 .top10 .s.reorder { color: var(--good); }
 .top10 .s.skip { color: var(--bad); }
+
+/* shop rows: details link + select circle */
+.match { padding: 10px; gap: 10px; align-items: stretch; transition: border-color .12s, background .12s; border: 1.5px solid var(--line); }
+.match.on { border-color: var(--accent); background: #FFF4EC; }
+.match-main { flex: 1; min-width: 0; display: flex; gap: 12px; align-items: center; }
+.match-side { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 10px; padding: 2px 2px 0; }
+.check-btn { width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid #CDBFAE; background: var(--surface); display: grid; place-items: center; padding: 0; }
+.match.on .check-btn { background: var(--accent); border-color: var(--accent); }
+.match.on .check-btn::after, .mini-check::after { content: ''; width: 12px; height: 6px; border: solid #fff; border-width: 0 0 2.5px 2.5px; transform: translateY(-1px) rotate(-45deg); }
+.mini-check { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); vertical-align: -3px; }
+.mini-check::after { width: 7px; height: 3.5px; border-width: 0 0 2px 2px; }
+.pick-bar { bottom: calc(84px + var(--safe-b)); }

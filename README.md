@@ -8,8 +8,7 @@ Een webapp voor Dauwe, Reinoud en Walter om de koffies van [Cross Roast](https:/
 |---|---|
 | **Coffees** | Alle gedronken koffies met ieders score. Zoeken, filteren (Reorder/Skip, single origin/blend, continent) en sorteren. Swipe naar links om te verwijderen. |
 | **Taste** | Smaakprofiel van de crew of per persoon: samenvatting, top 10, "niet meer bestellen", smaakkaart, proces, aciditeit/body/zoetheid/bitterheid, smaken, herkomst, wie op wie lijkt. |
-| **＋** | Tik de koffies aan die je bestelde, uit het huidige Cross Roast-aanbod. Ze gaan in je laatste bestelling of een nieuwe. Een link plakken of manueel invullen kan voor koffies die niet meer op de site staan. |
-| **Shop** | Het huidige aanbod met filters. Al geproefde koffies tonen jullie score; nieuwe tonen een verwachte score "for you". Tik voor een volledige fiche met voorspelling per persoon. Onder **Our orders** staan jullie bestellingen. |
+| **Shop** | Het huidige aanbod van Cross Roast met filters. Tik op een koffie voor de fiche met verwachte score per persoon; tik op het rondje om hem aan te vinken en voeg je selectie toe aan je laatste of een nieuwe bestelling. Ook al geproefde koffies kan je zo opnieuw bestellen. Onderaan: link plakken of manueel invullen voor koffies die niet meer op de site staan. Onder **Our orders** staan jullie bestellingen. |
 | **Settings** | Crew, demodata, uitleg over de schattingen, gegevens wissen. |
 
 Alles werkt **zonder AI en volledig gratis**: de smaakanalyse gebruikt een ingebouwde woordenlijst (bv. "limoen" → citrus → meer aciditeit) en eenvoudige statistiek.
