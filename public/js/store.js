@@ -1,3 +1,5 @@
+import { canonicalNotes } from './parse.js';
+
 // Local storage of all Brew Crew data (version 1: on this device only).
 // Photos are kept in IndexedDB because they are too big for localStorage.
 
@@ -20,10 +22,23 @@ function fresh() {
   };
 }
 
+// Brings older records up to date: one coffee can be in several orders, notes in one language.
+export function normalizeCoffee(c) {
+  if (!Array.isArray(c.orderIds)) c.orderIds = c.orderId ? [c.orderId] : [];
+  delete c.orderId;
+  c.notes = canonicalNotes(c.notes);
+  c.scores ||= {};
+  return c;
+}
+
 function load() {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...fresh(), ...JSON.parse(raw) };
+    if (raw) {
+      const data = { ...fresh(), ...JSON.parse(raw) };
+      data.coffees.forEach(normalizeCoffee);
+      return data;
+    }
   } catch {}
   return fresh();
 }
@@ -48,14 +63,28 @@ if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
 export const getCoffee = (id) => db.coffees.find((c) => c.id === id);
 export const findBySlug = (slug) => db.coffees.find((c) => c.slug === slug);
 
+// Adds a coffee, or (if you already had it) adds it to the given order again.
 export function addCoffee(parsed, orderId) {
   const existing = findBySlug(parsed.slug);
-  if (existing) return { coffee: existing, existed: true };
-  const coffee = { ...parsed, id: uid(), addedAt: new Date().toISOString(), orderId: orderId || null, scores: {} };
+  if (existing) {
+    if (orderId && !existing.orderIds.includes(orderId)) { existing.orderIds.push(orderId); save(); }
+    return { coffee: existing, existed: true };
+  }
+  const coffee = normalizeCoffee({ ...parsed, id: uid(), addedAt: new Date().toISOString(), orderIds: orderId ? [orderId] : [], scores: {} });
   db.coffees.unshift(coffee);
   save();
   return { coffee, existed: false };
 }
+
+export function addToOrder(coffeeId, orderId) {
+  const c = getCoffee(coffeeId);
+  if (c && orderId && !c.orderIds.includes(orderId)) { c.orderIds.push(orderId); save(); }
+}
+export function removeFromOrder(coffeeId, orderId) {
+  const c = getCoffee(coffeeId);
+  if (c) { c.orderIds = c.orderIds.filter((x) => x !== orderId); save(); }
+}
+export const coffeeOrders = (c) => (c.orderIds || []).map(getOrder).filter(Boolean).sort((a, b) => b.date.localeCompare(a.date));
 
 export function updateCoffee(id, patch) {
   const c = getCoffee(id);
@@ -92,7 +121,7 @@ export function deleteCoffee(id) {
 
 // ---------- orders ----------
 export const getOrder = (id) => db.orders.find((o) => o.id === id);
-export const orderCoffees = (id) => db.coffees.filter((c) => c.orderId === id);
+export const orderCoffees = (id) => db.coffees.filter((c) => (c.orderIds || []).includes(id));
 
 export function createOrder(date = today(), extra = {}) {
   const order = { id: uid(), date, note: '', ...extra };
@@ -117,7 +146,7 @@ export function updateOrder(id, patch) {
 
 export function deleteOrder(id) {
   db.orders = db.orders.filter((o) => o.id !== id);
-  db.coffees.forEach((c) => { if (c.orderId === id) c.orderId = null; });
+  db.coffees.forEach((c) => { c.orderIds = (c.orderIds || []).filter((x) => x !== id); });
   save();
 }
 
@@ -142,10 +171,17 @@ export function replaceAll(data) {
   Object.assign(db, fresh(), data);
   save();
 }
+export function addDemo({ orders, coffees }) {
+  db.orders.push(...orders);
+  db.orders.sort((a, b) => b.date.localeCompare(a.date));
+  db.coffees.push(...coffees.filter((c) => !findBySlug(c.slug)).map(normalizeCoffee));
+  save();
+}
 export function removeDemo() {
   const demoCoffees = db.coffees.filter((c) => c.demo).map((c) => c.id);
   db.coffees = db.coffees.filter((c) => !c.demo);
   db.orders = db.orders.filter((o) => !o.demo);
+  db.coffees.forEach((c) => { c.orderIds = c.orderIds.filter((x) => !x.startsWith('demo-')); });
   demoCoffees.forEach(deletePhoto);
   save();
 }

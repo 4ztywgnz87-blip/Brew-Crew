@@ -14,13 +14,16 @@ test('flavor families from Dutch and English notes', () => {
   assert.deepEqual(familiesOfNote('Aardbei'), ['berry']);
   assert.deepEqual(familiesOfNote('Limoen'), ['citrus']);
   assert.deepEqual(familiesOfNote('Oranjebloesem'), ['floral']);
+  assert.deepEqual(familiesOfNote('Orange blossom'), ['floral']);
+  assert.deepEqual(familiesOfNote('Forest fruits'), ['berry']);
+  assert.deepEqual(familiesOfNote('Chocolate'), ['chocolate']);
   assert.deepEqual(familiesOfNote('Dark chocolate'), ['chocolate']);
   assert.ok(familiesOfNote('Geroosterde walnoten').includes('nutty'));
   assert.ok(familiesOfNote('Zwarte thee').includes('tea'));
 });
 
 test('every catalog note maps to at least one family (or is a texture word)', () => {
-  const texture = /romig|crème|boter|gebalanceerd|aciditeit|zoet|notig|ahorn/i;
+  const texture = /balanced|cream|creamy|buttery|sweet/i;
   const missing = [...new Set(cat.flatMap((c) => c.notes))].filter((n) => !familiesOfNote(n).length && !texture.test(n));
   assert.deepEqual(missing, []);
 });
@@ -39,7 +42,7 @@ function crewData() {
     ...c,
     scores: {
       a: { score: c.process === 'Natural' ? 9 : c.process === 'Washed' ? 5 : 7 },
-      b: { score: (c.notes.join(' ').toLowerCase().includes('chocolade') ? 8.5 : 6) },
+      b: { score: (c.notes.join(' ').toLowerCase().includes('chocolate') ? 8.5 : 6) },
       c: { score: c.process === 'Natural' ? 8.5 : c.process === 'Washed' ? 5.5 : 7 },
     },
   }));

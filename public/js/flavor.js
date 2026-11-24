@@ -3,21 +3,21 @@
 // No AI involved: just a word list and some rules of thumb.
 
 export const FAMILIES = [
-  { key: 'berry', label: 'Berries & red fruit', short: 'Berries', words: ['aardbei', 'bes', 'bessen', 'bosvrucht', 'braam', 'framboos', 'kers', 'cherry', 'berry', 'berries', 'strawberry', 'raspberry', 'cranberry', 'rode vrucht', 'red fruit', 'cassis', 'rode aalbes'] },
+  { key: 'berry', label: 'Berries & red fruit', short: 'Berries', words: ['aardbei', 'bes', 'bessen', 'bosvrucht', 'braam', 'framboos', 'kers', 'cherry', 'berry', 'berries', 'strawberry', 'raspberry', 'cranberry', 'rode vrucht', 'red fruit', 'cassis', 'rode aalbes', 'forest', 'currant'] },
   { key: 'citrus', label: 'Citrus', short: 'Citrus', words: ['limoen', 'citroen', 'sinaasappel', 'mandarijn', 'tangerine', 'grapefruit', 'pompelmoes', 'bergamot', 'lime', 'lemon', 'orange', 'citrus', 'yuzu', 'clementine'] },
   { key: 'tropical', label: 'Tropical fruit', short: 'Tropical', words: ['tropisch', 'tropical', 'ananas', 'pineapple', 'mango', 'passievrucht', 'passion', 'papaya', 'lychee', 'litchi', 'banaan', 'banana', '^kiwi', 'guave', 'guava'] },
   { key: 'stone', label: 'Stone fruit', short: 'Stone fruit', words: ['perzik', 'abrikoos', 'steenfruit', 'nectarine', 'peach', 'apricot', 'stone fruit', 'pruim', 'plum', 'geel fruit', 'yellow fruit'] },
   { key: 'ripe', label: 'Ripe, dried & winey', short: 'Winey', words: ['gedroogd', 'dried', 'rozijn', 'raisin', 'dadel', '^date', 'vijg', '^fig', 'likeur', 'liqueur', 'wijn', 'winey', '^wine', '^rum', 'rijp fruit', 'ripe fruit', 'druif', 'grape', 'boozy', 'gefermenteerd', 'fermented'] },
   { key: 'floral', label: 'Floral', short: 'Floral', words: ['floraal', 'floral', 'jasmijn', 'jasmine', 'bloesem', 'blossom', 'roos', '^rose', 'lavendel', 'lavender', 'hibiscus', 'bloem', 'flower', 'vlier', 'elderflower'] },
   { key: 'chocolate', label: 'Chocolate & cacao', short: 'Chocolate', words: ['chocolade', 'chocolate', 'cacao', 'cocoa', 'choco'] },
-  { key: 'nutty', label: 'Nutty', short: 'Nutty', words: ['noot', 'noten', '^nut', 'notig', 'hazelnoot', 'hazelnut', 'amandel', 'almond', 'walnoot', 'walnut', 'pecan', 'nougat', 'praline', 'pinda', 'peanut', 'cashew', 'marsepein', 'marzipan'] },
+  { key: 'nutty', label: 'Nutty', short: 'Nutty', words: ['noot', 'noten', '^nut', '^nuts', 'nutty', 'notig', 'hazelnoot', 'hazelnut', 'amandel', 'almond', 'walnoot', 'walnut', 'pecan', 'nougat', 'praline', 'pinda', 'peanut', 'cashew', 'marsepein', 'marzipan'] },
   { key: 'caramel', label: 'Caramel & sweet', short: 'Caramel', words: ['karamel', 'caramel', 'honing', 'honey', 'suiker', 'sugar', 'vanille', 'vanilla', 'toffee', 'ahorn', 'maple', 'brûlée', 'brulee', 'siroop', 'syrup', 'zoet', 'sweet', 'butterscotch', 'stroop', 'melasse', 'molasses', 'marshmallow', 'speculoos', 'koekje', 'biscuit', 'cookie'] },
   { key: 'spice', label: 'Spice', short: 'Spice', words: ['kruidig', 'spicy', 'spice', 'kaneel', 'cinnamon', 'kruidnagel', 'clove', 'peper', 'pepper', 'nootmuskaat', 'nutmeg', 'gember', 'ginger', 'kardemom', 'cardamom', 'anijs', '^cola', 'tabak', 'tobacco'] },
   { key: 'tea', label: 'Tea & herbal', short: 'Tea', words: ['thee', '^tea', 'kruiden', 'herbal', 'munt', '^mint', 'earl grey', 'kamille', 'chamomile', 'citroengras', 'lemongrass', 'groen', 'green'] },
 ];
 
 // Words that say something about mouthfeel rather than a flavor family.
-const CREAMY = ['romig', 'creamy', 'crème', 'creme', 'boter', 'butter', 'body', '^vol', 'volle', 'full', 'zijdezacht', 'silky'];
+const CREAMY = ['romig', 'creamy', '^cream', 'crème', 'creme', 'boter', 'butter', 'body', '^vol', 'volle', 'full', 'zijdezacht', 'silky'];
 const DARK = ['pure chocolade', 'donkere chocolade', 'dark chocolate', 'cacao', 'cocoa', 'cacao nibs', 'bitter'];
 
 const norm = (s) => s.toLowerCase().normalize('NFC');
@@ -28,6 +28,8 @@ const hasWord = (text, w) =>
 
 export function familiesOfNote(note) {
   const t = norm(note);
+  // "Orange blossom" / "oranjebloesem" is a flower, not citrus.
+  if (/blossom|bloesem/.test(t)) return ['floral'];
   // "melkchocolade" is chocolate, "notig" nutty; "sinaasappelbloesem" both citrus & floral.
   return FAMILIES.filter((f) => f.words.some((w) => hasWord(t, w))).map((f) => f.key);
 }

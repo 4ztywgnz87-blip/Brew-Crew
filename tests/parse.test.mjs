@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { parseProduct, parseProcess, parseAltitude, decode } from '../public/js/parse.js';
+import { parseProduct, parseProcess, parseAltitude, decode, canonicalNote, canonicalNotes, regionsOf } from '../public/js/parse.js';
 import { slugFromUrl } from '../functions/_lib/crossroast.js';
 import { findLinks } from '../public/js/api.js';
 
@@ -14,7 +14,7 @@ test('parses El Salvador – Las Brisas', () => {
   assert.deepEqual(c.countries, ['El Salvador']);
   assert.equal(c.process, 'Natural');
   assert.deepEqual(c.modifiers, ['Anaerobic']);
-  assert.deepEqual(c.notes, ['Aardbei', 'Gedroogde pruim', 'Cacao']);
+  assert.deepEqual(c.notes, ['Strawberry', 'Dried plum', 'Cacao']);
   assert.equal(c.variety, 'Pacas');
   assert.equal(c.altitude, 1450);
   assert.equal(c.harvest, '2025'); // description wins over stale attribute
@@ -27,7 +27,7 @@ test('parses El Salvador – Las Brisas', () => {
 test('parses Colombia – El Para (washed)', () => {
   const c = bySlug('colombia-el-para');
   assert.equal(c.process, 'Washed');
-  assert.deepEqual(c.notes, ['Pure chocolade', 'Zwarte thee', 'Limoen']);
+  assert.deepEqual(c.notes, ['Dark chocolate', 'Black tea', 'Lime']);
   assert.equal(c.harvest, '2026');
 });
 
@@ -66,4 +66,25 @@ test('link handling', () => {
   assert.equal(slugFromUrl('crossroast.be/product/colombia-el-para/?attribute_pa_hoeveelheid=250-gram'), 'colombia-el-para');
   assert.equal(slugFromUrl('https://evil.example/product/x/'), null);
   assert.deepEqual(findLinks('look https://www.crossroast.be/product/a-b/ and\nhttps://www.crossroast.be/product/c-d/ https://www.crossroast.be/product/a-b/'), ['a-b', 'c-d']);
+});
+
+test('Dutch and English tasting notes become one', () => {
+  assert.equal(canonicalNote('Pure chocolade'), 'Dark chocolate');
+  assert.equal(canonicalNote('donkere chocolade'), 'Dark chocolate');
+  assert.equal(canonicalNote('Dark chocolate'), 'Dark chocolate');
+  assert.equal(canonicalNote('Bosbes'), 'Blueberry');
+  assert.equal(canonicalNote('Blauwe bes'), 'Blueberry');
+  assert.equal(canonicalNote('Bessen'), 'Berries');
+  assert.equal(canonicalNote('berries'), 'Berries');
+  assert.equal(canonicalNote('Tropisch fruit'), 'Tropical fruit');
+  assert.deepEqual(canonicalNotes(['Kers', 'Cherry', 'kersen']), ['Cherry']);
+  const all = new Set(cat.flatMap((p) => parseProduct(p).notes));
+  for (const dutch of ['Aardbei', 'Pure chocolade', 'Tropisch fruit', 'Bosbes', 'Kers']) assert.ok(!all.has(dutch), dutch);
+});
+
+test('regions like on crossroast.be', () => {
+  assert.deepEqual(regionsOf({ countries: ['Kenya'] }), ['Africa']);
+  assert.deepEqual(regionsOf({ countries: ['Brazil', 'Guatemala'] }), ['South America', 'Central America']);
+  assert.deepEqual(regionsOf({ countries: ['Papua New Guinea'] }), ['Oceania']);
+  for (const p of cat) { const c = parseProduct(p); assert.ok(regionsOf(c).length, c.name); }
 });

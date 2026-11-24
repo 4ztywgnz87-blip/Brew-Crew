@@ -1,7 +1,7 @@
 import * as store from './store.js';
 import { db } from './store.js';
 import { fetchProduct, fetchCatalog, findLinks } from './api.js';
-import { regionsOf, REGIONS } from './parse.js';
+import { regionsOf, REGIONS, canonicalNotes } from './parse.js';
 import { estimateAttributes, familiesOf, familyLabel, ATTRIBUTES } from './flavor.js';
 import {
   groupScore, personScore, verdict, preferences, attributeTrends, radar, confidence,
@@ -24,6 +24,7 @@ const ICON = {
   edit: svg('<path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/>'),
   camera: svg('<path d="M4 8h3l2-3h6l2 3h3v11H4V8Z"/><circle cx="12" cy="13" r="3.5"/>'),
   paste: svg('<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6"/>'),
+  filter: '<svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg>',
   trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>',
 };
 
@@ -49,6 +50,29 @@ function ask({ title, text = '', ok = 'Delete', cancel = 'Cancel', danger = true
       if (e.target === el) return close(false);
       const b = e.target.closest('[data-r]');
       if (b) close(b.dataset.r === '1');
+    });
+  });
+}
+
+// Sheet to pick which order a coffee goes into.
+function chooseOrder(c) {
+  const latest = latestOrder();
+  const options = [];
+  if (latest && !(c.orderIds || []).includes(latest.id)) options.push([latest.id, `${orderName(latest)} · ${store.orderCoffees(latest.id).length} coffees`]);
+  options.push(['new', 'New order · today']);
+  return new Promise((resolve) => {
+    const el = document.createElement('div');
+    el.className = 'sheet-backdrop';
+    el.innerHTML = `<div class="sheet" role="dialog" aria-modal="true"><h2>Ordered it again?</h2><p>Add “${esc(c.name)}” to:</p>
+      <div class="stack">${options.map(([v, l]) => `<button class="btn block ${v === 'new' ? 'ghost' : 'primary'}" data-v="${v}">${esc(l)}</button>`).join('')}
+      <button class="btn block ghost" data-v="">Cancel</button></div></div>`;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('show'));
+    const close = (r) => { el.classList.remove('show'); setTimeout(() => el.remove(), 200); resolve(r); };
+    el.addEventListener('click', (e) => {
+      if (e.target === el) return close(null);
+      const b = e.target.closest('[data-v]');
+      if (b) close(b.dataset.v || null);
     });
   });
 }
@@ -84,24 +108,50 @@ function personScoresLine(c) {
   }).join('');
 }
 
-// ---- filters (type + region, like on crossroast.be)
-function filterChips(f, extra = []) {
-  const chip = (group, key, label) => `<button class="chip ${f[group] === key ? 'on' : ''}" data-g="${group}" data-k="${esc(key)}">${esc(label)}</button>`;
-  return `<div class="chips scroll filters">
-    ${extra.map(([g, k, l]) => chip(g, k, l)).join('')}${extra.length ? '<span class="chip-sep"></span>' : ''}
-    ${chip('type', 'Single origin', 'Single origin')}${chip('type', 'Blend', 'Blend')}<span class="chip-sep"></span>
-    ${REGIONS.map((r) => chip('region', r, r)).join('')}
-  </div>`;
+// ---- search + filter panel (type + region, like on crossroast.be)
+const FILTER_GROUPS = {
+  verdict: { title: 'Score', options: [['reorder', 'Reorder'], ['ok', 'Okay'], ['skip', 'Skip'], ['unrated', 'Not rated']] },
+  hide: { title: 'Show', options: [['tasted', 'Only coffees we haven’t tasted']] },
+  region: { title: 'Region', options: REGIONS.map((r) => [r, r]) },
+  type: { title: 'Type', options: [['Single origin', 'Single origin'], ['Blend', 'Blend']] },
+};
+function searchBar(f, placeholder, groups) {
+  return `<div class="searchrow">
+      <div class="search grow">${ICON.search}<input class="input" id="q" type="search" placeholder="${esc(placeholder)}" value="${esc(f.q || '')}" autocomplete="off"></div>
+      <button class="filter-btn" id="filterBtn" aria-label="Filters" aria-expanded="false">${ICON.filter}<span class="fcount"></span></button>
+    </div>
+    <div class="card filter-panel hidden" id="filterPanel">
+      ${groups.map((g) => `<div class="fgroup"><div class="ftitle">${FILTER_GROUPS[g].title}</div><div class="chips">${FILTER_GROUPS[g].options.map(([k, l]) => `<button class="chip" data-g="${g}" data-k="${esc(k)}">${esc(l)}</button>`).join('')}</div></div>`).join('')}
+      <div class="row" style="justify-content:space-between"><button class="linkish small" id="clearF">Clear all</button><button class="btn sm dark" id="doneF">Done</button></div>
+    </div>
+    <div class="chips active-filters hidden" id="activeF"></div>`;
 }
-function bindFilters(root, f, onChange) {
-  root.querySelector('.filters').addEventListener('click', (e) => {
+function bindSearch(f, groups, onChange) {
+  const panel = $view.querySelector('#filterPanel');
+  const btn = $view.querySelector('#filterBtn');
+  const act = $view.querySelector('#activeF');
+  const paint = () => {
+    const active = groups.filter((g) => f[g]);
+    btn.classList.toggle('on', active.length > 0);
+    btn.querySelector('.fcount').textContent = active.length || '';
+    panel.querySelectorAll('[data-g]').forEach((x) => x.classList.toggle('on', f[x.dataset.g] === x.dataset.k));
+    act.innerHTML = active.map((g) => `<button class="chip on" data-x="${g}">${esc(FILTER_GROUPS[g].options.find((o) => o[0] === f[g])?.[1] || f[g])}<span aria-hidden="true">✕</span></button>`).join('');
+    act.classList.toggle('hidden', !active.length || !panel.classList.contains('hidden'));
+  };
+  const toggle = (open) => { panel.classList.toggle('hidden', !open); btn.setAttribute('aria-expanded', open); paint(); };
+  btn.addEventListener('click', () => toggle(panel.classList.contains('hidden')));
+  $view.querySelector('#doneF').addEventListener('click', () => toggle(false));
+  panel.addEventListener('click', (e) => {
     const b = e.target.closest('[data-g]');
     if (!b) return;
     const { g, k } = b.dataset;
     f[g] = f[g] === k ? null : k;
-    root.querySelectorAll(`.filters [data-g="${g}"]`).forEach((x) => x.classList.toggle('on', f[g] === x.dataset.k));
-    onChange();
+    paint(); onChange();
   });
+  $view.querySelector('#clearF').addEventListener('click', () => { groups.forEach((g) => (f[g] = null)); paint(); onChange(); });
+  act.addEventListener('click', (e) => { const b = e.target.closest('[data-x]'); if (b) { f[b.dataset.x] = null; paint(); onChange(); } });
+  $view.querySelector('#q').addEventListener('input', (e) => { f.q = e.target.value; onChange(); });
+  paint();
 }
 const passes = (c, f) => (!f.type || (c.type || 'Single origin') === f.type) && (!f.region || regionsOf(c).includes(f.region));
 const matchesQuery = (c, q) => !q || [c.name, c.processText, c.variety, ...(c.countries || []), ...(c.notes || [])].join(' ').toLowerCase().includes(q.trim().toLowerCase());
@@ -162,8 +212,7 @@ function viewCoffees() {
   }
   $view.innerHTML = `
     <div class="top"><div><div class="eyebrow">${total} coffee${total === 1 ? '' : 's'} tasted</div><h1>Brew Crew</h1></div></div>
-    <div class="search">${ICON.search}<input class="input" id="q" type="search" placeholder="Search name, country, note…" value="${esc(listState.q)}" autocomplete="off"></div>
-    ${filterChips(listState, [['verdict', 'reorder', 'Reorder'], ['verdict', 'skip', 'Skip'], ['verdict', 'unrated', 'Not rated']])}
+    ${searchBar(listState, 'Search name, country, note…', ['verdict', 'region', 'type'])}
     <div class="row" style="margin-top:8px;justify-content:space-between">
       <span class="small muted" id="count"></span>
       <select class="select" id="sort" style="width:auto;padding:6px 10px;font-size:14px;border-radius:11px">
@@ -210,9 +259,8 @@ function viewCoffees() {
     }
     return false;
   });
-  $view.querySelector('#q').addEventListener('input', (e) => { listState.q = e.target.value; draw(); });
   $view.querySelector('#sort').addEventListener('change', (e) => { listState.sort = e.target.value; draw(); });
-  bindFilters($view, listState, draw);
+  bindSearch(listState, ['verdict', 'region', 'type'], draw);
 }
 
 // Swipe left on .swipe > .card to reveal the delete button.
@@ -290,8 +338,7 @@ function viewAdd() {
   const state = { picked: new Set(), links: new Map(), dest: fixed || defaultDest() };
   $view.innerHTML = `
     <div class="top"><div><div class="eyebrow">New coffees</div><h1>What did you order?</h1><div class="sub">Tap the coffees from the Cross Roast shop</div></div></div>
-    <div class="search">${ICON.search}<input class="input" id="q" type="search" placeholder="Search the shop…" autocomplete="off" value="${esc(addState.q)}"></div>
-    ${filterChips(addState)}
+    ${searchBar(addState, 'Search the shop…', ['region', 'type'])}
     <div id="shopPick" class="list" style="margin-top:6px"></div>
     <details class="card pad" style="margin:16px 0 150px" id="linkBox">
       <summary class="small" style="font-weight:700;cursor:pointer">Not in the shop anymore? Paste a link</summary>
@@ -312,7 +359,7 @@ function viewAdd() {
   const chosen = () => {
     const fromShop = (catalog || []).filter((c) => state.picked.has(c.slug));
     const fromLinks = [...state.links.values()].filter((i) => i.status === 'ok' && !state.picked.has(i.coffee.slug)).map((i) => i.coffee);
-    return [...fromShop, ...fromLinks].filter((c) => !store.findBySlug(c.slug));
+    return [...fromShop, ...fromLinks];
   };
   const updateBar = () => {
     const n = chosen().length;
@@ -334,12 +381,13 @@ function viewAdd() {
       .sort((a, b) => (a.ex ? 1 : 0) - (b.ex ? 1 : 0));
     $pick.innerHTML = rows.map(({ c, ex }) => {
       const on = state.picked.has(c.slug);
-      return ex
-        ? `<a class="card item tasted" href="#/coffee/${ex.id}">${coffeeImg(c)}<div class="grow">${nameHtml(c)}
-            <div style="margin-top:5px">${verdictTag(groupScore(ex, people()))} <span class="small muted">already tasted</span></div></div>${scoreBadge(groupScore(ex, people()))}</a>`
-        : `<button class="card item pick ${on ? 'on' : ''}" data-slug="${esc(c.slug)}">${coffeeImg(c)}<div class="grow">${nameHtml(c)}
-            <div class="meta">${esc(procLine(c))}</div><div class="meta" style="color:var(--ink-2)">${esc(c.notes.join(' · '))}</div></div>
-            <span class="check" aria-hidden="true"></span></button>`;
+      const g = ex ? groupScore(ex, people()) : null;
+      const last = ex ? store.coffeeOrders(ex)[0] : null;
+      return `<button class="card item pick ${on ? 'on' : ''}" data-slug="${esc(c.slug)}">${coffeeImg(c)}<div class="grow">${nameHtml(c)}
+          <div class="meta">${esc(procLine(c))}</div>
+          ${ex ? `<div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap">${verdictTag(g)}<span class="small muted">${g != null ? `scored ${fmt(g)}` : 'tasted'}${last ? ` · last ordered ${esc(dateLabel(last.date))}` : ''}</span></div>`
+               : `<div class="meta" style="color:var(--ink-2)">${esc(c.notes.join(' · '))}</div>`}</div>
+          <span class="check" aria-hidden="true"></span></button>`;
     }).join('') || '<div class="small muted">Nothing matches.</div>';
   };
 
@@ -356,8 +404,7 @@ function viewAdd() {
     b.classList.toggle('on', state.picked.has(s));
     updateBar();
   });
-  $view.querySelector('#q').addEventListener('input', (e) => { addState.q = e.target.value; drawShop(); });
-  bindFilters($view, addState, drawShop);
+  bindSearch(addState, ['region', 'type'], drawShop);
 
   // link fallback
   const drawLinks = () => {
@@ -367,7 +414,7 @@ function viewAdd() {
         <a class="linkish small" href="#/edit/new?url=${encodeURIComponent('https://www.crossroast.be/product/' + it.slug + '/')}">Enter manually instead</a></div></div>`;
       const c = it.coffee, ex = store.findBySlug(c.slug);
       return `<div class="card preview">${coffeeImg(c)}<div class="grow">${nameHtml(c)}<div class="small muted">${esc(procLine(c))}</div>
-          ${ex ? `<div class="small" style="margin-top:6px"><span class="tag ok">Already tasted</span> <a class="linkish" href="#/coffee/${ex.id}">Open it</a></div>` : ''}</div></div>`;
+          ${ex ? `<div class="small muted" style="margin-top:6px">Tasted before: it will be added to this order again.</div>` : ''}</div></div>`;
     }).join('');
     updateBar();
   };
@@ -410,6 +457,8 @@ function ratingBar(value) {
   </div>`;
 }
 
+// Scores only change on a clear tap or a deliberate sideways slide,
+// so scrolling past the bars with your thumb never changes a score.
 function bindRating($el, initial, onChange, onCommit) {
   let value = initial;
   const fill = $el.querySelector('.fill');
@@ -424,12 +473,31 @@ function bindRating($el, initial, onChange, onCommit) {
     const f = Math.max(0, Math.min(1, (x - r.left) / r.width));
     return Math.max(1, Math.min(10, Math.ceil(f * 20) / 2)); // left half of a cell = x.5
   };
-  let dragging = false;
-  $el.addEventListener('pointerdown', (e) => { dragging = true; $el.setPointerCapture(e.pointerId); value = at(e.clientX); paint(); onChange(value); });
-  $el.addEventListener('pointermove', (e) => { if (!dragging) return; const v = at(e.clientX); if (v !== value) { value = v; paint(); onChange(value); } });
-  const end = () => { if (dragging) { dragging = false; onCommit(value); } };
-  $el.addEventListener('pointerup', end);
-  $el.addEventListener('pointercancel', end);
+  let g = null; // gesture: { x0, y0, t0, mode: null | 'slide' | 'scroll', start }
+  $el.addEventListener('pointerdown', (e) => { g = { x0: e.clientX, y0: e.clientY, t0: Date.now(), mode: null, start: value, id: e.pointerId }; });
+  $el.addEventListener('pointermove', (e) => {
+    if (!g) return;
+    const dx = e.clientX - g.x0, dy = e.clientY - g.y0;
+    if (!g.mode) {
+      if (Math.abs(dy) > 8 && Math.abs(dy) > Math.abs(dx)) { g.mode = 'scroll'; return; }
+      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.5) { g.mode = 'slide'; try { $el.setPointerCapture(g.id); } catch {} }
+      else return;
+    }
+    if (g.mode !== 'slide') return;
+    const v = at(e.clientX);
+    if (v !== value) { value = v; paint(); onChange(value); }
+  });
+  $el.addEventListener('pointerup', (e) => {
+    if (!g) return;
+    const moved = Math.hypot(e.clientX - g.x0, e.clientY - g.y0);
+    if (g.mode === 'slide') onCommit(value);
+    else if (!g.mode && moved < 8 && Date.now() - g.t0 < 600) { value = at(e.clientX); paint(); onChange(value); onCommit(value); }
+    g = null;
+  });
+  $el.addEventListener('pointercancel', () => {
+    if (g?.mode === 'slide') { value = g.start; paint(); onChange(value); }
+    g = null;
+  });
   $el.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowRight' || e.key === 'ArrowUp') value = Math.min(10, (value ?? 0.5) + 0.5);
     else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') value = Math.max(1, (value ?? 1.5) - 0.5);
@@ -497,7 +565,7 @@ function viewCoffee(id) {
   const c = store.getCoffee(id);
   if (!c) { location.hash = '#/'; return; }
   const isNew = query().get('new') === '1';
-  const order = c.orderId ? store.getOrder(c.orderId) : null;
+  const orders = store.coffeeOrders(c);
   const g = groupScore(c, people());
 
   $view.innerHTML = `
@@ -525,8 +593,9 @@ function viewCoffee(id) {
         ${people().map((p) => {
           const s = c.scores?.[p.id] || {};
           return `<div class="rater" data-p="${p.id}">
-            <div class="rater-top"><span class="who">${esc(p.name)}</span>
-              <div class="rater-tools"><button data-act="note">${s.note ? 'Edit note' : '+ Note'}</button><button data-act="clear" class="${s.score == null ? 'hidden' : ''}">Clear</button>
+            <div class="rater-top">
+              <div class="who-wrap"><span class="who">${esc(p.name)}</span><button data-act="clear" class="clear-btn ${s.score == null ? 'invisible' : ''}">Clear</button></div>
+              <div class="rater-tools"><button data-act="note">${s.note ? 'Edit note' : '+ Note'}</button>
               <span class="val ${s.score == null ? 'unset' : ''}">${s.score == null ? 'no score' : fmtHalf(s.score)}</span></div></div>
             ${ratingBar(s.score ?? null)}
             ${s.note ? `<div class="note-show">“${esc(s.note)}”</div>` : ''}
@@ -536,7 +605,14 @@ function viewCoffee(id) {
       </div>
     </div>
 
-    ${coffeeSections(c, `${fact('Order', order ? `<a class="linkish" href="#/order/${order.id}">${esc(orderName(order))}</a>` : 'none', true)}${fact('Added', c.addedAt ? dateLabel(c.addedAt.slice(0, 10)) : null)}`)}
+    <div class="section">
+      <div class="section-head"><h2>Order history</h2><span class="hint">${orders.length ? `ordered ${orders.length}×` : ''}</span></div>
+      <div class="card hist">${orders.map((o) => `<div class="hist-row"><a href="#/order/${o.id}"><b>${esc(orderName(o))}</b><span class="small muted">${(() => { const n = store.orderCoffees(o.id).length; return `${n} coffee${n === 1 ? '' : 's'}`; })()}</span></a>
+        <button class="hist-x" data-rmorder="${o.id}" aria-label="Remove from this order">✕</button></div>`).join('') || '<div class="hist-row small muted">Not part of an order yet.</div>'}</div>
+      <button class="btn block" id="reorder" style="margin-top:10px">+ We ordered it again</button>
+    </div>
+
+    ${coffeeSections(c, fact('Added', c.addedAt ? dateLabel(c.addedAt.slice(0, 10)) : null))}
 
     <div class="section hidden" id="myPhotoSec">
       <div class="section-head"><h2>Our photo</h2><button class="linkish small" id="rmPhoto">Remove</button></div>
@@ -547,6 +623,19 @@ function viewCoffee(id) {
 
   bindSections();
   $view.querySelector('#back').addEventListener('click', () => goBack('#/'));
+  $view.querySelector('#reorder').addEventListener('click', async () => {
+    const dest = await chooseOrder(c);
+    if (!dest) return;
+    store.addToOrder(c.id, resolveDest(dest));
+    toast('Added to the order');
+    viewCoffee(c.id);
+  });
+  $view.querySelectorAll('[data-rmorder]').forEach((b) => b.addEventListener('click', async () => {
+    const o = store.getOrder(b.dataset.rmorder);
+    if (await ask({ title: 'Remove from this order?', text: `“${c.name}” stays in your list with its scores; it’s only taken out of ${orderName(o)}.`, ok: 'Remove' })) {
+      store.removeFromOrder(c.id, o.id); viewCoffee(c.id);
+    }
+  }));
   $view.querySelector('#del').addEventListener('click', async () => {
     if (await ask({ title: 'Delete this coffee?', text: `“${c.name}” and all its scores will be removed.` })) {
       store.deleteCoffee(c.id); toast('Deleted'); location.hash = '#/';
@@ -563,7 +652,7 @@ function viewCoffee(id) {
     const pid = $r.dataset.p;
     const $val = $r.querySelector('.val');
     const $clear = $r.querySelector('[data-act=clear]');
-    const show = (v) => { $val.textContent = v == null ? 'no score' : fmtHalf(v); $val.classList.toggle('unset', v == null); $clear.classList.toggle('hidden', v == null); };
+    const show = (v) => { $val.textContent = v == null ? 'no score' : fmtHalf(v); $val.classList.toggle('unset', v == null); $clear.classList.toggle('invisible', v == null); };
     const bar = bindRating($r.querySelector('.rbar'), c.scores?.[pid]?.score ?? null, show, (v) => { store.setScore(c.id, pid, v); refreshGroup(); toast('Saved'); });
     $clear.addEventListener('click', () => { bar.set(null); show(null); store.setScore(c.id, pid, null); refreshGroup(); toast('Score cleared'); });
     const $note = $r.querySelector('.note-input');
@@ -603,12 +692,8 @@ function viewEdit(id) {
   const isNew = id === 'new';
   const c = isNew ? { name: '', url: query().get('url') || '', countries: [], notes: [], modifiers: [], process: '', variety: '', altitudeText: '', harvest: '', type: 'Single origin' } : store.getCoffee(id);
   if (!c) { location.hash = '#/'; return; }
-  const orderSel = isNew ? defaultDest() : c.orderId || 'none';
-  const opts = [
-    ...(isNew ? [['new', 'New order · today']] : []),
-    ...db.orders.slice(0, 8).map((o) => [o.id, orderName(o)]),
-    ['none', 'Not part of an order'],
-  ];
+  const orderSel = defaultDest();
+  const opts = [['new', 'New order · today'], ...db.orders.slice(0, 8).map((o) => [o.id, orderName(o)]), ['none', 'Not part of an order']];
   $view.innerHTML = `
     <div class="top"><button class="back" id="back">${ICON.back} Back</button></div>
     <h1 style="margin-bottom:18px">${isNew ? 'Add manually' : 'Edit coffee'}</h1>
@@ -624,7 +709,7 @@ function viewEdit(id) {
       <label class="field"><span>Altitude</span><input class="input" name="altitudeText" value="${esc(c.altitudeText || '')}" placeholder="e.g. 1600 – 1800 m"></label>
       <label class="field"><span>Harvest</span><input class="input" name="harvest" value="${esc(c.harvest || '')}"></label>
       <label class="field"><span>Type</span><select class="select" name="type">${['Single origin', 'Blend'].map((t) => `<option ${c.type === t ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
-      <label class="field"><span>Order</span><select class="select" name="order">${opts.map(([v, l]) => `<option value="${v}" ${v === orderSel ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
+      ${isNew ? `<label class="field"><span>Order</span><select class="select" name="order">${opts.map(([v, l]) => `<option value="${v}" ${v === orderSel ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>` : ''}
       <button class="btn primary block" type="submit">${isNew ? 'Add & rate' : 'Save'}</button>
     </form>`;
   $view.querySelector('#back').addEventListener('click', () => history.back());
@@ -636,10 +721,10 @@ function viewEdit(id) {
     const patch = {
       name: fd.name.trim(), url: fd.url.trim(), countries: list(fd.countries), process: fd.process || null,
       processText: [fd.process, ...list(fd.modifiers)].filter(Boolean).join(' – '), modifiers: list(fd.modifiers),
-      notes: list(fd.notes), variety: fd.variety.trim() || null, altitudeText: fd.altitudeText.trim() || null,
+      notes: canonicalNotes(list(fd.notes)), variety: fd.variety.trim() || null, altitudeText: fd.altitudeText.trim() || null,
       altitude: alts.length ? Math.round(alts.reduce((a, b) => a + b, 0) / alts.length) : null, harvest: fd.harvest.trim() || null, type: fd.type,
     };
-    const orderId = fd.order === 'none' ? null : resolveDest(fd.order);
+    const orderId = isNew && fd.order !== 'none' ? resolveDest(fd.order) : null;
     if (isNew) {
       const slug = (patch.url && findLinks(patch.url)[0]) || 'manual-' + store.uid();
       const existing = store.findBySlug(slug);
@@ -647,7 +732,7 @@ function viewEdit(id) {
       const { coffee } = store.addCoffee({ ...patch, slug, story: '', intro: '', image: null, thumb: null }, orderId);
       location.hash = `#/coffee/${coffee.id}?new=1`;
     } else {
-      store.updateCoffee(c.id, { ...patch, orderId });
+      store.updateCoffee(c.id, patch);
       toast('Saved');
       location.hash = `#/coffee/${c.id}`;
     }
@@ -712,7 +797,7 @@ function viewTaste() {
     rated.forEach(({ coffee, score }) => regionsOf(coffee).forEach((r) => (by[r] ||= []).push(score)));
     return Object.entries(by).map(([value, s]) => ({ value, n: s.length, avg: s.reduce((a, b) => a + b, 0) / s.length })).sort((a, b) => b.avg - a.avg);
   })();
-  const listRow = (x, i) => `<a href="#/coffee/${x.coffee.id}">${i != null ? `<span class="rank">${i + 1}</span>` : ''}${coffeeImg(x.coffee, 'thumb sm')}<div class="grow">${nameHtml(x.coffee)}</div><span class="s" style="color:var(--${verdict(x.score) === 'reorder' ? 'good' : verdict(x.score) === 'skip' ? 'bad' : 'mid'})">${fmt(x.score)}</span></a>`;
+  const listRow = (x, i) => `<a href="#/coffee/${x.coffee.id}">${i != null ? `<span class="rank">${i + 1}</span>` : ''}${coffeeImg(x.coffee, 'thumb sm')}<div class="grow">${nameHtml(x.coffee)}</div><span class="s ${verdict(x.score)}">${fmt(x.score)}</span></a>`;
 
   $view.innerHTML = `
     ${head}
@@ -827,14 +912,12 @@ function viewShop() {
   $view.innerHTML = `
     <div class="top"><div><div class="eyebrow">Cross Roast</div><h1>Shop</h1></div><button class="btn sm ghost" id="reload">Refresh</button></div>
     ${shopTabs('shop')}
-    <div class="search">${ICON.search}<input class="input" id="q" type="search" placeholder="Search the shop…" autocomplete="off" value="${esc(shopState.q)}"></div>
-    ${filterChips(shopState, [['hide', 'tasted', 'Not tasted yet']])}
+    ${searchBar(shopState, 'Search the shop…', ['hide', 'region', 'type'])}
     ${nScored < 3 ? `<div class="card notice" style="margin-top:10px">Score ${3 - nScored} more coffee${3 - nScored === 1 ? '' : 's'} to see how much you’ll probably like each one.</div>` : ''}
     <div id="catalog" class="list"></div>`;
   bindShopTabs();
   $view.querySelector('#reload').addEventListener('click', () => loadCatalog(true));
-  $view.querySelector('#q').addEventListener('input', (e) => { shopState.q = e.target.value; drawCatalog(); });
-  bindFilters($view, shopState, drawCatalog);
+  bindSearch(shopState, ['hide', 'region', 'type'], drawCatalog);
   if (shopState.items) drawCatalog(); else loadCatalog(false);
 }
 
@@ -994,7 +1077,7 @@ function viewSettings() {
         <p class="small muted" style="margin:0">Everything is saved on this device (${db.coffees.length} coffees, ${db.orders.length} orders). Syncing between phones comes in version 2.</p>
         <button class="btn danger block" id="wipe">Delete everything</button>
       </div></div>
-    <p class="small muted" style="text-align:center;margin-top:28px">Brew Crew · v1.1</p>`;
+    <p class="small muted" style="text-align:center;margin-top:28px">Brew Crew · v1.2</p>`;
   $view.querySelectorAll('[data-p]').forEach((i) => i.addEventListener('change', () => { store.renamePerson(i.dataset.p, i.value); toast('Saved'); }));
   $view.querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', async () => {
     const p = people().find((x) => x.id === b.dataset.rm);
@@ -1003,11 +1086,7 @@ function viewSettings() {
   $view.querySelector('#addP').addEventListener('click', () => { store.addPerson($view.querySelector('#newName').value); viewSettings(); });
   $view.querySelector('#demo')?.addEventListener('click', async () => {
     const { demoData } = await import('./demo.js');
-    const d = demoData(people());
-    db.orders.push(...d.orders);
-    db.orders.sort((a, b) => b.date.localeCompare(a.date));
-    db.coffees.push(...d.coffees.filter((c) => !store.findBySlug(c.slug)));
-    store.save();
+    store.addDemo(demoData(people()));
     toast('Demo data loaded');
     location.hash = '#/taste';
   });

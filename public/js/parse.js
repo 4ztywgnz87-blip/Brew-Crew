@@ -112,7 +112,7 @@ export function parseProduct(p) {
   const processText = get('processing', 'proces', 'process', 'verwerking') || (attr['processing'] || []).join(' – ') || null;
   const process = parseProcess(processText);
   const notesText = get('tasting notes', 'smaaknoten', 'smaak') || (attr['tasting notes'] || []).join(' – ');
-  const notes = splitList(notesText).map((n) => n.charAt(0).toUpperCase() + n.slice(1));
+  const notes = canonicalNotes(splitList(notesText));
   const altitudeText = get('hoogte plantage', 'hoogte', 'altitude');
 
   const minor = p.prices?.minor ?? 2;
@@ -154,3 +154,41 @@ export const REGIONS = Object.keys(REGION);
 export function regionsOf(coffee) {
   return [...new Set((coffee.countries || []).map((c) => REGIONS.find((r) => REGION[r].includes(c))).filter(Boolean))];
 }
+
+// Cross Roast writes tasting notes sometimes in Dutch, sometimes in English.
+// Everything is mapped to one English name, so "Bosbes" and "Blueberry" are the same note.
+const NOTE_EN = {
+  aardbei: 'Strawberry', aardbeien: 'Strawberry', framboos: 'Raspberry', frambozen: 'Raspberry',
+  braambes: 'Blackberry', braambessen: 'Blackberry', bramen: 'Blackberry', blackberries: 'Blackberry',
+  bosbes: 'Blueberry', bosbessen: 'Blueberry', 'blauwe bes': 'Blueberry', 'blauwe bessen': 'Blueberry', blueberries: 'Blueberry',
+  bosvruchten: 'Forest fruits', bosvrucht: 'Forest fruits', 'forest fruit': 'Forest fruits', 'rode vruchten': 'Red fruits', 'red fruit': 'Red fruits',
+  bessen: 'Berries', bes: 'Berries', berry: 'Berries', cassis: 'Blackcurrant', 'zwarte bes': 'Blackcurrant', 'rode bes': 'Redcurrant', 'rode aalbes': 'Redcurrant',
+  kers: 'Cherry', kersen: 'Cherry', cherries: 'Cherry', 'donkere kers': 'Dark cherry', 'donkere kersen': 'Dark cherry',
+  druif: 'Grape', druiven: 'Grape', grapes: 'Grape', rozijn: 'Raisin', rozijnen: 'Raisin', vijg: 'Fig', dadel: 'Date',
+  limoen: 'Lime', citroen: 'Lemon', sinaasappel: 'Orange', appelsien: 'Orange', mandarijn: 'Mandarin', tangerine: 'Tangerine',
+  pompelmoes: 'Grapefruit', 'geconfijte sinaasappel': 'Candied orange', bergamot: 'Bergamot',
+  perzik: 'Peach', abrikoos: 'Apricot', pruim: 'Plum', pruimen: 'Plum', 'gedroogde pruim': 'Dried plum', 'gedroogde pruimen': 'Dried plum',
+  steenfruit: 'Stone fruit', 'gedroogd steenfruit': 'Dried stone fruit', 'geel fruit': 'Yellow fruit', 'rijp fruit': 'Ripe fruit',
+  'tropisch fruit': 'Tropical fruit', ananas: 'Pineapple', mango: 'Mango', passievrucht: 'Passion fruit', banaan: 'Banana', appel: 'Apple', peer: 'Pear',
+  likeur: 'Liqueur', wijnachtig: 'Winey', wijn: 'Wine',
+  floraal: 'Floral', bloemig: 'Floral', jasmijn: 'Jasmine', oranjebloesem: 'Orange blossom', roos: 'Rose', lavendel: 'Lavender', vlierbloesem: 'Elderflower',
+  chocolade: 'Chocolate', choco: 'Chocolate', 'pure chocolade': 'Dark chocolate', 'donkere chocolade': 'Dark chocolate', 'fondant chocolade': 'Dark chocolate',
+  melkchocolade: 'Milk chocolate', 'witte chocolade': 'White chocolate', cacao: 'Cacao', cocoa: 'Cacao', 'cacao nibs': 'Cacao nibs', cacaonibs: 'Cacao nibs',
+  noten: 'Nuts', notig: 'Nutty', noot: 'Nuts', hazelnoot: 'Hazelnut', hazelnoten: 'Hazelnut', amandel: 'Almond', amandelen: 'Almond',
+  'geroosterde amandel': 'Roasted almond', 'geroosterde amandelen': 'Roasted almond', walnoot: 'Walnut', walnoten: 'Walnut',
+  'geroosterde walnoot': 'Roasted walnut', 'geroosterde walnoten': 'Roasted walnut', pecannoot: 'Pecan', pinda: 'Peanut', marsepein: 'Marzipan',
+  karamel: 'Caramel', honing: 'Honey', 'bruine suiker': 'Brown sugar', rietsuiker: 'Cane sugar', vanille: 'Vanilla', ahorn: 'Maple', ahornsiroop: 'Maple syrup',
+  stroop: 'Syrup', melasse: 'Molasses', zoet: 'Sweet', toffee: 'Toffee', speculoos: 'Speculoos', koekje: 'Biscuit',
+  kruidig: 'Spicy', kaneel: 'Cinnamon', kruidnagel: 'Clove', nootmuskaat: 'Nutmeg', gember: 'Ginger', peper: 'Pepper', kardemom: 'Cardamom', tabak: 'Tobacco',
+  'zwarte thee': 'Black tea', 'groene thee': 'Green tea', thee: 'Tea', kruiden: 'Herbal', munt: 'Mint',
+  romig: 'Creamy', crème: 'Cream', creme: 'Cream', boter: 'Buttery', boterig: 'Buttery', gebalanceerd: 'Balanced', 'gebalanceerde aciditeit': 'Balanced acidity',
+  'crème brûlée': 'Crème brûlée',
+};
+export function canonicalNote(note) {
+  const t = String(note || '').trim().replace(/\s+/g, ' ');
+  if (!t) return '';
+  const k = t.toLowerCase();
+  if (NOTE_EN[k]) return NOTE_EN[k];
+  return k.charAt(0).toUpperCase() + k.slice(1);
+}
+export const canonicalNotes = (notes) => [...new Set((notes || []).map(canonicalNote).filter(Boolean))];
