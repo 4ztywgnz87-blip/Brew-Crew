@@ -364,7 +364,7 @@ function viewAdd() {
   const updateBar = () => {
     const n = chosen().length;
     $actions.classList.toggle('hidden', !n);
-    $addBtn.textContent = n > 1 ? `Add ${n} coffees` : 'Add & rate';
+    $addBtn.textContent = n > 1 ? `Add ${n} coffees` : 'Add coffee';
   };
   $actions.addEventListener('click', (e) => {
     const b = e.target.closest('[data-d]');
@@ -443,8 +443,8 @@ function viewAdd() {
     if (!list.length) return;
     const orderId = resolveDest(state.dest);
     const added = list.map((c) => store.addCoffee(c, orderId).coffee);
-    toast(added.length > 1 ? `${added.length} coffees added` : 'Added');
-    location.hash = added.length === 1 ? `#/coffee/${added[0].id}?new=1` : `#/order/${orderId}`;
+    toast(added.length > 1 ? `${added.length} coffees added` : `${added[0].name} added`);
+    location.hash = '#/';
   });
 }
 
@@ -710,7 +710,7 @@ function viewEdit(id) {
       <label class="field"><span>Harvest</span><input class="input" name="harvest" value="${esc(c.harvest || '')}"></label>
       <label class="field"><span>Type</span><select class="select" name="type">${['Single origin', 'Blend'].map((t) => `<option ${c.type === t ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
       ${isNew ? `<label class="field"><span>Order</span><select class="select" name="order">${opts.map(([v, l]) => `<option value="${v}" ${v === orderSel ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>` : ''}
-      <button class="btn primary block" type="submit">${isNew ? 'Add & rate' : 'Save'}</button>
+      <button class="btn primary block" type="submit">${isNew ? 'Add coffee' : 'Save'}</button>
     </form>`;
   $view.querySelector('#back').addEventListener('click', () => history.back());
   $view.querySelector('#f').addEventListener('submit', (e) => {
@@ -729,8 +729,9 @@ function viewEdit(id) {
       const slug = (patch.url && findLinks(patch.url)[0]) || 'manual-' + store.uid();
       const existing = store.findBySlug(slug);
       if (existing) { location.hash = `#/coffee/${existing.id}`; return; }
-      const { coffee } = store.addCoffee({ ...patch, slug, story: '', intro: '', image: null, thumb: null }, orderId);
-      location.hash = `#/coffee/${coffee.id}?new=1`;
+      store.addCoffee({ ...patch, slug, story: '', intro: '', image: null, thumb: null }, orderId);
+      toast(`${patch.name} added`);
+      location.hash = '#/';
     } else {
       store.updateCoffee(c.id, patch);
       toast('Saved');
@@ -1007,9 +1008,9 @@ async function viewShopItem(slug) {
   bindSections();
   $view.querySelector('#back').addEventListener('click', () => goBack('#/shop'));
   $view.querySelector('#add').addEventListener('click', () => {
-    const { coffee } = store.addCoffee(c, resolveDest(dest));
-    toast('Added');
-    location.hash = `#/coffee/${coffee.id}?new=1`;
+    store.addCoffee(c, resolveDest(dest));
+    toast(`${c.name} added`);
+    location.hash = '#/';
   });
 }
 
@@ -1101,5 +1102,8 @@ function viewSettings() {
 // ================================================================ boot
 render();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+    // Check for a new version every time the app comes back to the foreground.
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+  }).catch(() => {});
 }
