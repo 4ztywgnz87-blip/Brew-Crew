@@ -20,8 +20,8 @@ Alles werkt **zonder AI en volledig gratis**: de smaakanalyse gebruikt een ingeb
 
 De repository bevat een `wrangler.jsonc`. Daarin staat alles wat Cloudflare moet weten, dus je hoeft **niets in te stellen**:
 
-1. [dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages** → **Create** → **Import a repository** → kies **Coffee** → **Deploy**.
-2. Na ongeveer een minuut krijg je een link zoals `https://coffee.<jouw-naam>.workers.dev`.
+1. [dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages** → **Create** → **Import a repository** → kies **Brew-Crew** → **Deploy**.
+2. Na ongeveer een minuut krijg je een link zoals `https://brew-crew.<jouw-naam>.workers.dev`.
 
 Elke nieuwe versie op GitHub zet Cloudflare daarna automatisch online.
 

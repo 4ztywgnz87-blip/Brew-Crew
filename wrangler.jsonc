@@ -1,6 +1,6 @@
 // Cloudflare configuration: tells Cloudflare where the app lives, so no dashboard settings are needed.
 {
-  "name": "coffee",
+  "name": "brew-crew",
   "main": "src/worker.js",
   "compatibility_date": "2025-09-01",
   "assets": {
