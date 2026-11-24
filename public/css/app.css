@@ -399,3 +399,39 @@ button.item { width: 100%; text-align: left; font: inherit; color: inherit; }
 .mini-check { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); vertical-align: -3px; }
 .mini-check::after { width: 7px; height: 3.5px; border-width: 0 0 2px 2px; }
 .pick-bar { bottom: calc(84px + var(--safe-b)); }
+
+/* ---------- review round: polish ---------- */
+.hero { aspect-ratio: 16 / 11; max-height: 250px; }
+.rbar .ticks span.half { color: var(--ink); background: linear-gradient(90deg, transparent 50%, rgba(255, 255, 255, .55) 50%); }
+.select { font-size: 16px; }
+
+/* home: coffees waiting for a score */
+.to-rate { display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-bottom: 12px; background: var(--ink); color: #fff; border-color: var(--ink); }
+.to-rate b { display: block; font: 800 16px var(--display); letter-spacing: -.01em; }
+.to-rate span { font-size: 12.5px; color: #C9BBAE; }
+.to-rate .arrow { font: 800 22px var(--display); color: var(--accent); }
+.to-rate .thumbs { display: flex; flex: none; }
+.thumb.xs { width: 34px; height: 34px; border-radius: 9px; border: 2px solid var(--ink); margin-left: -10px; background: #3A2E27; }
+.to-rate .thumbs .thumb.xs:first-child { margin-left: 0; }
+.score-cta { color: var(--accent); font-weight: 700; }
+
+/* detail */
+.next-btn { margin-top: 12px; gap: 12px; }
+.danger-link { color: var(--bad); font-weight: 700; }
+
+/* taste */
+.progress-dots { display: flex; gap: 6px; justify-content: center; margin-bottom: 14px; }
+.progress-dots i { width: 34px; height: 8px; border-radius: 4px; background: var(--line); }
+.progress-dots i.on { background: var(--accent); }
+details.more > summary { list-style: none; display: flex; align-items: baseline; justify-content: space-between; cursor: pointer; }
+details.more > summary::-webkit-details-marker { display: none; }
+details.more > summary h2::after { content: ' +'; color: var(--accent); }
+details.more[open] > summary h2::after { content: ' –'; }
+
+/* orders */
+.date-chip { position: relative; display: inline-flex; align-items: center; height: 48px; padding: 0 14px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--surface); font-weight: 700; font-size: 14px; color: var(--ink-2); white-space: nowrap; }
+.date-chip input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; }
+
+/* shop hint */
+.mini-circle { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid #CDBFAE; vertical-align: -2px; }
+.toast { white-space: normal; text-align: center; max-width: calc(100% - 40px); width: max-content; }

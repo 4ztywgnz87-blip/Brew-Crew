@@ -98,7 +98,12 @@ const verdictTag = (v) => {
   const t = verdict(v);
   return t === 'reorder' ? '<span class="tag reorder">Reorder</span>' : t === 'skip' ? '<span class="tag skip">Skip</span>' : t === 'ok' ? '<span class="tag ok">Okay</span>' : '<span class="tag plain">Not rated</span>';
 };
-const dateLabel = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+const dateLabel = (d) => {
+  const dt = new Date(d + 'T12:00:00');
+  const opts = { day: 'numeric', month: 'short' };
+  if (dt.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+  return dt.toLocaleDateString('en-GB', opts);
+};
 const orderName = (o) => o.name || `Order · ${dateLabel(o.date)}`;
 
 function personScoresLine(c) {
@@ -191,10 +196,26 @@ function render() {
   location.hash = '#/';
 }
 const query = () => new URLSearchParams(location.hash.split('?')[1] || '');
-window.addEventListener('hashchange', () => { render(); $view.scrollTop = 0; });
+// Lists keep their scroll position when you come back; detail pages open at the top.
+const scrollMem = {};
+let curHash = location.hash || '#/';
+const isListPage = (h) => /^#?\/?$|^#\/(shop|taste|orders)$/.test(h.split('?')[0]);
+window.addEventListener('hashchange', () => {
+  scrollMem[curHash] = $view.scrollTop;
+  curHash = location.hash || '#/';
+  render();
+  $view.scrollTop = isListPage(curHash) ? scrollMem[curHash] || 0 : 0;
+});
+document.getElementById('tabbar').addEventListener('click', (e) => {
+  const a = e.target.closest('a');
+  if (a && (location.hash || '#/') === a.getAttribute('href')) { e.preventDefault(); $view.scrollTo({ top: 0, behavior: 'smooth' }); }
+});
 const goBack = (fallback) => (history.length > 1 ? history.back() : (location.hash = fallback));
 
 // ================================================================ coffees list
+// Coffees nobody has scored yet, newest first.
+const unscored = () => db.coffees.filter((c) => groupScore(c, people()) == null).sort((a, b) => (b.addedAt || '').localeCompare(a.addedAt || ''));
+
 const listState = { q: '', verdict: null, type: null, region: null, sort: 'newest' };
 
 function viewCoffees() {
@@ -210,12 +231,17 @@ function viewCoffees() {
       </div>`;
     return;
   }
+  const toRate = unscored();
   $view.innerHTML = `
-    <div class="top"><div><div class="eyebrow">${total} coffee${total === 1 ? '' : 's'} tasted</div><h1>Brew Crew</h1></div></div>
+    <div class="top"><div><div class="eyebrow">${total} coffee${total === 1 ? '' : 's'}${toRate.length ? ` · ${toRate.length} to score` : ''}</div><h1>Brew Crew</h1></div></div>
+    ${toRate.length ? `<a class="card to-rate" href="#/coffee/${toRate[0].id}">
+        <div class="thumbs">${toRate.slice(0, 3).map((c) => coffeeImg(c, 'thumb xs')).join('')}</div>
+        <div class="grow"><b>${toRate.length === 1 ? '1 coffee needs' : `${toRate.length} coffees need`} a score</b><span>Tap to start scoring</span></div>
+        <span class="arrow">→</span></a>` : ''}
     ${searchBar(listState, 'Search name, country, note…', ['verdict', 'region', 'type'])}
     <div class="row" style="margin-top:8px;justify-content:space-between">
       <span class="small muted" id="count"></span>
-      <select class="select" id="sort" style="width:auto;padding:6px 10px;font-size:14px;border-radius:11px">
+      <select class="select" id="sort" style="width:auto;padding:6px 10px;border-radius:11px">
         <option value="newest">Newest first</option><option value="best">Best score</option><option value="worst">Lowest score</option><option value="name">Name</option>
       </select>
     </div>
@@ -242,7 +268,7 @@ function viewCoffees() {
           <button class="swipe-del" aria-label="Delete">${ICON.trash}</button>
           <a class="card item" href="#/coffee/${c.id}" draggable="false">
             ${coffeeImg(c)}
-            <div class="grow">${nameHtml(c)}<div class="meta">${esc(procLine(c))}</div><div class="people">${personScoresLine(c)}</div></div>
+            <div class="grow">${nameHtml(c)}<div class="meta">${esc(procLine(c))}</div>${s == null ? '<div class="people"><span class="score-cta">Tap to score</span></div>' : `<div class="people">${personScoresLine(c)}</div>`}</div>
             ${scoreBadge(s)}
           </a>
         </div>`).join('')
@@ -323,7 +349,7 @@ function ratingBar(value) {
   const pct = value == null ? 0 : (value / 10) * 100;
   return `<div class="rbar" role="slider" aria-valuemin="1" aria-valuemax="10" aria-valuenow="${value ?? ''}" tabindex="0">
     <div class="fill" style="width:${pct}%"></div>
-    <div class="ticks">${Array.from({ length: 10 }, (_, i) => `<span class="${value != null && i + 1 <= value ? 'lit' : ''}">${i + 1}</span>`).join('')}</div>
+    <div class="ticks">${Array.from({ length: 10 }, (_, i) => `<span class="${value != null && i + 1 <= value ? 'lit' : value === i + 0.5 ? 'half' : ''}">${i + 1}</span>`).join('')}</div>
   </div>`;
 }
 
@@ -335,7 +361,7 @@ function bindRating($el, initial, onChange, onCommit) {
   const ticks = [...$el.querySelectorAll('.ticks span')];
   const paint = () => {
     fill.style.width = value == null ? '0%' : `${(value / 10) * 100}%`;
-    ticks.forEach((t, i) => t.classList.toggle('lit', value != null && i + 1 <= value));
+    ticks.forEach((t, i) => { t.classList.toggle('lit', value != null && i + 1 <= value); t.classList.toggle('half', value === i + 0.5); });
     $el.setAttribute('aria-valuenow', value ?? '');
   };
   const at = (x) => {
@@ -473,6 +499,7 @@ function viewCoffee(id) {
           </div>`;
         }).join('')}
       </div>
+      <div id="nextBox">${nextHtml(c)}</div>
     </div>
 
     <div class="section">
@@ -489,7 +516,7 @@ function viewCoffee(id) {
       <img id="myPhoto" class="card" style="width:100%" alt="">
     </div>
 
-    <div class="section"><button class="btn danger block" id="del">Delete this coffee</button></div>`;
+    <div class="section" style="text-align:center"><button class="linkish danger-link" id="del">Delete this coffee</button></div>`;
 
   bindSections();
   $view.querySelector('#back').addEventListener('click', () => goBack('#/'));
@@ -516,6 +543,7 @@ function viewCoffee(id) {
     const gs = groupScore(c, people());
     $view.querySelector('#groupBadge').innerHTML = scoreBadge(gs, 'lg');
     $view.querySelector('#verdictRow').firstElementChild.outerHTML = verdictTag(gs);
+    $view.querySelector('#nextBox').innerHTML = nextHtml(c);
   };
 
   $view.querySelectorAll('.rater').forEach(($r) => {
@@ -555,6 +583,16 @@ function viewCoffee(id) {
   if (c.hasPhoto) showPhoto();
 
   if (isNew) setTimeout(() => $view.querySelector('#raters')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+}
+
+// "Next to score" button: the next coffee nobody scored yet, preferring the same order.
+function nextHtml(c) {
+  const rest = unscored().filter((x) => x.id !== c.id);
+  if (!rest.length) return '';
+  const same = rest.find((x) => (x.orderIds || []).some((o) => (c.orderIds || []).includes(o)));
+  const next = same || rest[0];
+  return `<a class="btn dark block next-btn" href="#/coffee/${next.id}"><span class="grow ellipsis" style="text-align:left">Next to score: ${esc(next.name)}</span><span>→</span></a>
+    <div class="small muted" style="text-align:center;margin-top:6px">${rest.length} more waiting for a score</div>`;
 }
 
 // ================================================================ edit / manual
@@ -634,8 +672,17 @@ function viewTaste() {
   const lines = summary(db.coffees, subject, ps);
   const head = `<div class="top"><div><div class="eyebrow">Taste profile</div><h1>What ${esc(subjName)} likes</h1></div></div>${whoPicker()}`;
 
-  if (prefs.n === 0) {
-    $view.innerHTML = `${head}<div class="card empty" style="margin-top:16px"><h2>Nothing scored yet</h2><p>Score a few coffees and the taste profile appears here.</p><a class="btn primary" href="#/">Go to coffees</a></div>`;
+  if (prefs.n < 3) {
+    const left = 3 - prefs.n;
+    const pending = unscored();
+    $view.innerHTML = `${head}
+      <div class="card empty" style="margin-top:16px">
+        <div class="progress-dots">${[0, 1, 2].map((i) => `<i class="${i < prefs.n ? 'on' : ''}"></i>`).join('')}</div>
+        <h2>${left} more score${left === 1 ? '' : 's'} to go</h2>
+        <p>The taste profile appears once ${subject === 'group' ? 'the crew has' : `${esc(subjName)} has`} scored 3 coffees. It gets sharper with every coffee after that.</p>
+        ${pending.length ? `<a class="btn primary" href="#/coffee/${pending[0].id}">Score a coffee</a>` : '<a class="btn primary" href="#/shop">Go to the shop</a>'}
+      </div>
+      ${rated.length ? `<div class="section"><div class="section-head"><h2>Scored so far</h2></div><div class="card top10">${rated.map((x) => `<a href="#/coffee/${x.coffee.id}">${coffeeImg(x.coffee, 'thumb sm')}<div class="grow">${nameHtml(x.coffee)}</div><span class="s ${verdict(x.score)}">${fmt(x.score)}</span></a>`).join('')}</div></div>` : ''}`;
     bindWho();
     return;
   }
@@ -679,7 +726,7 @@ function viewTaste() {
 
     ${lines.length ? `<div class="section"><div class="section-head"><h2>In a nutshell</h2></div><div class="card pad"><ul class="summary">${lines.map((l) => `<li>${l}</li>`).join('')}</ul></div></div>` : ''}
 
-    <div class="section"><div class="section-head"><h2>Top ${Math.min(10, rated.length)}</h2><span class="hint">reorder from ${REORDER_AT}</span></div>
+    <div class="section"><div class="section-head"><h2>Favourites</h2><span class="hint">reorder from ${REORDER_AT}</span></div>
       <div class="card top10">${rated.slice(0, 10).map((x, i) => listRow(x, i)).join('')}</div></div>
 
     ${bottom.length ? `<div class="section"><div class="section-head"><h2>Don’t reorder</h2><span class="hint">${SKIP_AT} or lower</span></div>
@@ -704,16 +751,20 @@ function viewTaste() {
       ${notesLiked.length ? `<div class="small muted" style="margin:14px 0 6px">Tasting notes that came back at least twice</div>${bars(notesLiked.map((x) => ({ ...x, value: x.value.charAt(0).toUpperCase() + x.value.slice(1) })), (v) => v, 10)}` : ''}</div></div>
 
     <div class="section"><div class="section-head"><h2>Where it’s from</h2></div>
-      <div class="card pad">${bars(regionRows)}<div style="height:14px"></div>${bars(prefs.dims.country, (v) => v, 10)}</div></div>
-    <div class="section"><div class="section-head"><h2>Altitude & type</h2></div><div class="card pad">${bars(prefs.dims.altitude, (v) => v, 5)}<div style="height:14px"></div>${bars(prefs.dims.type)}</div></div>
+      <div class="card pad">${bars(regionRows)}</div></div>
 
     ${subject === 'group' ? crewBlock() : ''}
 
-    <div class="section"><div class="section-head"><h2>Numbers</h2></div>
-      <div class="stats">
+    <details class="section more">
+      <summary><h2>More stats</h2><span class="hint">countries, altitude, numbers</span></summary>
+      <div class="card pad" style="margin-top:10px"><div class="small muted" style="margin-bottom:6px">Countries</div>${bars(prefs.dims.country, (v) => v, 12)}
+        <div class="small muted" style="margin:14px 0 6px">Altitude</div>${bars(prefs.dims.altitude, (v) => v, 5)}
+        <div class="small muted" style="margin:14px 0 6px">Single origin vs blend</div>${bars(prefs.dims.type)}</div>
+      <div class="stats" style="margin-top:10px">
         ${stat(db.coffees.length, 'coffees')}${stat(prefs.n, 'scored')}${stat(fmt(avgAll), 'avg score')}
         ${stat(db.orders.length, 'orders')}${stat(countries.size, 'countries')}${stat(months[new Date().toISOString().slice(0, 7)] || 0, 'this month')}
-      </div></div>`;
+      </div>
+    </details>`;
   bindWho();
   $view.querySelector('[data-info]')?.addEventListener('click', () => $view.querySelector('[data-info-text]').classList.toggle('hidden'));
 }
@@ -796,13 +847,13 @@ function destPicker() {
 
 function viewShop() {
   const fixed = query().get('order');
-  pick = { picked: new Set(), dest: fixed || defaultDest(), fixed };
+  if (!pick.ready || pick.fixed !== fixed) pick = { ready: true, picked: new Set(), dest: fixed || defaultDest(), fixed };
   const nScored = scoredCoffees(db.coffees, 'group', people()).length;
   $view.innerHTML = `
     <div class="top"><div><div class="eyebrow">Cross Roast</div><h1>Shop</h1></div><button class="btn sm ghost" id="reload">Refresh</button></div>
     ${shopTabs('shop')}
     ${searchBar(shopState, 'Search the shop…', ['hide', 'region', 'type'])}
-    <div class="small muted" style="margin:2px 2px 0">Tap a coffee for details · tap <span class="mini-check"></span> to add it to an order</div>
+    <div class="small muted" style="margin:2px 2px 0">Tap a coffee for details · tap <span class="mini-circle"></span> to add it to an order</div>
     ${nScored < 3 ? `<div class="card notice" style="margin-top:10px">Score ${3 - nScored} more coffee${3 - nScored === 1 ? '' : 's'} to see how much you’ll probably like each one.</div>` : ''}
     <div id="catalog" class="list"></div>
     <div id="barSpace"></div>
@@ -831,11 +882,14 @@ function viewShop() {
     if (!list.length) return;
     const orderId = resolveDest(pick.dest);
     list.forEach((c) => store.addCoffee(c, orderId));
+    const backToOrder = !!pick.fixed;
+    pick = { picked: new Set(), dest: 'new', fixed: null };
     toast(list.length > 1 ? `${list.length} coffees added` : `${list[0].name} added`);
-    location.hash = pick.fixed ? `#/order/${orderId}` : '#/';
+    location.hash = backToOrder ? `#/order/${orderId}` : '#/';
   });
 
   if (shopState.items) drawCatalog(); else loadCatalog(false);
+  updateBar();
 }
 
 function chosen() {
@@ -973,19 +1027,23 @@ function viewOrder(id) {
   const o = store.getOrder(id);
   if (!o) { location.hash = '#/orders'; return; }
   const cs = store.orderCoffees(o.id);
+  const scored = cs.map((c) => groupScore(c, people())).filter((v) => v != null);
+  const avg = scored.length ? scored.reduce((a, b) => a + b, 0) / scored.length : null;
   $view.innerHTML = `
     <div class="top"><button class="back" id="back">${ICON.back} Orders</button></div>
-    <div class="eyebrow">${cs.length} coffee${cs.length === 1 ? '' : 's'}</div>
-    <h1>${esc(orderName(o))}</h1>
+    <div class="row" style="align-items:flex-end">
+      <div class="grow"><div class="eyebrow">${cs.length} coffee${cs.length === 1 ? '' : 's'} · ${scored.length} scored</div><h1>${esc(orderName(o))}</h1></div>
+      ${scoreBadge(avg)}
+    </div>
     <div class="row" style="margin:14px 0 4px;gap:8px">
-      <input class="input" type="date" id="date" value="${esc(o.date)}" style="max-width:180px">
+      <label class="date-chip">Change date<input type="date" id="date" value="${esc(o.date)}"></label>
       <a class="btn soft grow" href="#/shop?order=${o.id}">+ Add coffees</a>
     </div>
     <div class="list">${cs.map((c) => { const s = groupScore(c, people()); return `
       <a class="card item" href="#/coffee/${c.id}">${coffeeImg(c)}<div class="grow">${nameHtml(c)}
       <div class="meta">${esc(procLine(c))}</div><div class="people">${personScoresLine(c)}</div></div>${scoreBadge(s)}</a>`; }).join('') || '<div class="small muted">No coffees in this order yet.</div>'}</div>
     <label class="field section"><span>Order note</span><textarea class="textarea" id="note" placeholder="e.g. price paid, who ordered">${esc(o.note || '')}</textarea></label>
-    <div class="section"><button class="btn danger block" id="del">Delete order</button></div>`;
+    <div class="section" style="text-align:center"><button class="linkish danger-link" id="del">Delete this order</button></div>`;
   $view.querySelector('#back').addEventListener('click', () => (location.hash = '#/orders'));
   $view.querySelector('#date').addEventListener('change', (e) => { if (e.target.value) { store.updateOrder(o.id, { date: e.target.value }); toast('Saved'); viewOrder(id); } });
   $view.querySelector('#note').addEventListener('change', (e) => { store.updateOrder(o.id, { note: e.target.value }); toast('Saved'); });
@@ -1001,7 +1059,7 @@ function viewSettings() {
     <div class="top"><div><div class="eyebrow">Brew Crew</div><h1>Settings</h1></div></div>
     <div class="section" style="margin-top:8px"><div class="section-head"><h2>The crew</h2></div>
       <div class="card pad stack">
-        ${people().map((p) => `<div class="row"><input class="input" data-p="${p.id}" value="${esc(p.name)}"><button class="btn sm danger" data-rm="${p.id}">Remove</button></div>`).join('')}
+        ${people().map((p) => `<div class="row"><input class="input" data-p="${p.id}" value="${esc(p.name)}"><button class="linkish danger-link small" data-rm="${p.id}">Remove</button></div>`).join('')}
         <div class="row"><input class="input" id="newName" placeholder="New crew member"><button class="btn sm soft" id="addP">Add</button></div>
       </div></div>
     <div class="section"><div class="section-head"><h2>Try it out</h2></div>
@@ -1013,16 +1071,23 @@ function viewSettings() {
       <div class="card pad small" style="color:var(--ink-2)">${esc(ESTIMATE_TEXT)}<br><br>Predictions (“for you”) compare a coffee’s process, flavors, origin and estimated profile with how you scored similar coffees. They start after 3 scored coffees and get better from 10–15 on.</div></div>
     <div class="section"><div class="section-head"><h2>Data</h2></div>
       <div class="card pad stack">
-        <p class="small muted" style="margin:0">Everything is saved on this device (${db.coffees.length} coffees, ${db.orders.length} orders). Syncing between phones comes in version 2.</p>
-        <button class="btn danger block" id="wipe">Delete everything</button>
+        <p class="small muted" style="margin:0">Everything is saved on this phone (${db.coffees.length} coffees, ${db.orders.length} orders). Save a backup now and then, so nothing gets lost when you switch phones. Syncing between phones comes in version 2.</p>
+        <div class="row"><button class="btn dark grow" id="backup">Save backup</button><label class="btn ghost grow" style="cursor:pointer">Restore backup<input type="file" id="restore" accept="application/json,.json" hidden></label></div>
+        <div style="text-align:center"><button class="linkish danger-link small" id="wipe">Delete everything</button></div>
       </div></div>
-    <p class="small muted" style="text-align:center;margin-top:28px">Brew Crew · v1.2</p>`;
-  $view.querySelectorAll('[data-p]').forEach((i) => i.addEventListener('change', () => { store.renamePerson(i.dataset.p, i.value); toast('Saved'); }));
+    <p class="small muted" style="text-align:center;margin-top:28px">Brew Crew · v1.3</p>`;
+  $view.querySelectorAll('[data-p]').forEach((i) => i.addEventListener('change', () => {
+    if (!i.value.trim()) { i.value = people().find((p) => p.id === i.dataset.p).name; return; }
+    store.renamePerson(i.dataset.p, i.value); toast('Saved');
+  }));
   $view.querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', async () => {
     const p = people().find((x) => x.id === b.dataset.rm);
-    if (await ask({ title: `Remove ${p.name}?`, text: 'Their scores are hidden but kept, in case you add them back.', ok: 'Remove' })) { store.removePerson(p.id); viewSettings(); }
+    if (people().length <= 1) { toast('The crew needs at least one member'); return; }
+    if (await ask({ title: `Remove ${p.name}?`, text: `Their scores are kept: add “${p.name}” again later and they come back.`, ok: 'Remove' })) { store.removePerson(p.id); viewSettings(); }
   }));
-  $view.querySelector('#addP').addEventListener('click', () => { store.addPerson($view.querySelector('#newName').value); viewSettings(); });
+  const addP = () => { const v = $view.querySelector('#newName').value; if (!v.trim()) return; store.addPerson(v); toast(`${v.trim()} joined the crew`); viewSettings(); };
+  $view.querySelector('#addP').addEventListener('click', addP);
+  $view.querySelector('#newName').addEventListener('keydown', (e) => { if (e.key === 'Enter') addP(); });
   $view.querySelector('#demo')?.addEventListener('click', async () => {
     const { demoData } = await import('./demo.js');
     store.addDemo(demoData(people()));
@@ -1030,6 +1095,25 @@ function viewSettings() {
     location.hash = '#/taste';
   });
   $view.querySelector('#rmDemo')?.addEventListener('click', () => { store.removeDemo(); toast('Demo data removed'); viewSettings(); });
+  $view.querySelector('#backup').addEventListener('click', async () => {
+    const name = `brew-crew-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    const file = new File([store.exportData()], name, { type: 'application/json' });
+    try {
+      if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: 'Brew Crew backup' }); return; }
+    } catch (e) { if (e.name === 'AbortError') return; }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(file); a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast('Backup saved');
+  });
+  $view.querySelector('#restore').addEventListener('change', async (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f) return;
+    if (!(await ask({ title: 'Restore this backup?', text: 'Everything currently in the app is replaced by the backup.', ok: 'Restore', danger: false }))) return;
+    try { const n = store.importData(await f.text()); toast(`Restored ${n} coffees`); viewSettings(); }
+    catch (err) { toast(err.message.includes('Brew Crew') ? err.message : 'Could not read this file'); }
+  });
   $view.querySelector('#wipe').addEventListener('click', async () => {
     if (await ask({ title: 'Delete everything?', text: 'All coffees, scores and orders on this device will be removed. This cannot be undone.', ok: 'Delete all' })) {
       store.wipe(); toast('Everything deleted'); location.hash = '#/';

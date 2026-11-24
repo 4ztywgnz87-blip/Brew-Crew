@@ -155,14 +155,23 @@ export function renamePerson(id, name) {
   const p = db.people.find((x) => x.id === id);
   if (p && name.trim()) { p.name = name.trim(); save(); }
 }
+// A removed crew member who is added again (same name) gets their old scores back.
 export function addPerson(name) {
-  if (!name.trim()) return;
-  db.people.push({ id: uid(), name: name.trim() });
+  const n = name.trim();
+  if (!n) return;
+  db.formerPeople ||= [];
+  const back = db.formerPeople.find((p) => p.name.toLowerCase() === n.toLowerCase());
+  if (back) db.formerPeople = db.formerPeople.filter((p) => p !== back);
+  db.people.push(back ? { ...back, name: n } : { id: uid(), name: n });
   save();
 }
 export function removePerson(id) {
-  db.people = db.people.filter((p) => p.id !== id);
+  if (db.people.length <= 1) return false;
+  const p = db.people.find((x) => x.id === id);
+  db.people = db.people.filter((x) => x.id !== id);
+  if (p) (db.formerPeople ||= []).push(p);
   save();
+  return true;
 }
 
 // ---------- bulk ----------
@@ -223,4 +232,18 @@ export async function resizeImage(file, max = 900) {
   canvas.height = Math.round(bmp.height * scale);
   canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
   return new Promise((r) => canvas.toBlob(r, 'image/jpeg', 0.8));
+}
+
+// ---------- backup ----------
+export function exportData() {
+  return JSON.stringify({ app: 'brew-crew', exportedAt: new Date().toISOString(), ...db }, null, 1);
+}
+export function importData(text) {
+  const data = JSON.parse(text);
+  if (!data || !Array.isArray(data.coffees) || !Array.isArray(data.orders) || !Array.isArray(data.people)) throw new Error('This is not a Brew Crew backup.');
+  const { app, exportedAt, ...rest } = data;
+  replaceAll(rest);
+  db.coffees.forEach(normalizeCoffee);
+  save();
+  return db.coffees.length;
 }

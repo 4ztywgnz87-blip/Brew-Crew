@@ -5,6 +5,7 @@ export const REORDER_AT = 7.5;
 export const SKIP_AT = 5.5;
 const SHRINK = 2; // pulls averages of rarely-seen features towards "no opinion"
 
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const mean = (a) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : null);
 export const round1 = (v) => (v == null ? null : Math.round(v * 10) / 10);
 
@@ -186,7 +187,7 @@ export function summary(coffees, subject, people) {
   if (proc.length >= 2) {
     const best = proc[0], worst = proc[proc.length - 1];
     if (best.delta - worst.delta >= 0.4)
-      lines.push(`<b>${best.value}</b> coffees score best (${round1(best.avg)} on average), <b>${worst.value}</b> the lowest (${round1(worst.avg)}).`);
+      lines.push(`<b>${esc(best.value)}</b> coffees score best (${round1(best.avg)} on average), <b>${esc(worst.value)}</b> the lowest (${round1(worst.avg)}).`);
     else lines.push(`No strong preference between processes yet.`);
   }
   const fam = top('family');
@@ -199,7 +200,7 @@ export function summary(coffees, subject, people) {
     lines.push(t.r > 0 ? `The more <b>${t.high}</b> (${t.label.toLowerCase()}), the higher the score.` : `Prefers <b>${t.low}</b> over ${t.high} coffees (${t.label.toLowerCase()}).`);
   }
   const ctry = top('country');
-  if (ctry.length && ctry[0].shrunk > 0.25) lines.push(`Best country so far: <b>${ctry[0].value}</b> (${round1(ctry[0].avg)} avg over ${ctry[0].n}).`);
+  if (ctry.length && ctry[0].shrunk > 0.25) lines.push(`Best country so far: <b>${esc(ctry[0].value)}</b> (${round1(ctry[0].avg)} avg over ${ctry[0].n}).`);
   return lines;
 }
 

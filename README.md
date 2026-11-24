@@ -6,14 +6,14 @@ Een webapp voor Dauwe, Reinoud en Walter om de koffies van [Cross Roast](https:/
 
 | Scherm | Wat |
 |---|---|
-| **Coffees** | Alle gedronken koffies met ieders score. Zoeken, filteren (Reorder/Skip, single origin/blend, continent) en sorteren. Swipe naar links om te verwijderen. |
+| **Coffees** | Alle koffies met ieders score. Bovenaan staat hoeveel koffies nog een score nodig hebben; op een fiche brengt **Next to score** je meteen naar de volgende. Zoeken, filteren (Reorder/Skip, single origin/blend, continent) en sorteren. Swipe naar links om te verwijderen. |
 | **Taste** | Smaakprofiel van de crew of per persoon: samenvatting, top 10, "niet meer bestellen", smaakkaart, proces, aciditeit/body/zoetheid/bitterheid, smaken, herkomst, wie op wie lijkt. |
 | **Shop** | Het huidige aanbod van Cross Roast met filters. Tik op een koffie voor de fiche met verwachte score per persoon; tik op het rondje om hem aan te vinken en voeg je selectie toe aan je laatste of een nieuwe bestelling. Ook al geproefde koffies kan je zo opnieuw bestellen. Onder **Our orders** staan jullie bestellingen. |
-| **Settings** | Crew, demodata, uitleg over de schattingen, gegevens wissen. |
+| **Settings** | Crew, demodata, uitleg over de schattingen, **back-up bewaren en terugzetten**, gegevens wissen. |
 
 Alles werkt **zonder AI en volledig gratis**: de smaakanalyse gebruikt een ingebouwde woordenlijst (bv. "limoen" → citrus → meer aciditeit) en eenvoudige statistiek.
 
-> **Let op:** in versie 1 worden de gegevens op het toestel zelf bewaard. Gebruik de app dus op één gsm (die van Dauwe). Synchroniseren tussen toestellen komt in versie 2.
+> **Let op:** in versie 1 worden de gegevens op het toestel zelf bewaard. Gebruik de app dus op één gsm (die van Dauwe) en bewaar af en toe een back-up via Settings → **Save backup**. Synchroniseren tussen toestellen komt in versie 2.
 
 ## Online zetten via Cloudflare
 
