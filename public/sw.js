@@ -1,5 +1,5 @@
 // Service worker: the app opens instantly (from cache) and refreshes itself in the background.
-const VERSION = 'brewcrew-v1.0.0';
+const VERSION = 'brewcrew-v1.1.0';
 const SHELL = ['./', 'index.html', 'css/app.css', 'js/app.js', 'js/store.js', 'js/api.js', 'js/parse.js', 'js/flavor.js', 'js/analysis.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {

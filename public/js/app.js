@@ -91,7 +91,7 @@ function viewCoffees() {
         <a class="icon-btn" href="#/settings" aria-label="Settings">${ICON.gear}</a></div>
       <div class="card empty">
         <h2>No coffees yet</h2>
-        <p>Paste a link from crossroast.be and everything is filled in for you.<br>Then each of you gives a score.</p>
+        <p>Tap ＋, pick the coffees you ordered from the Cross Roast shop, and each of you gives a score.</p>
         <a class="btn primary" href="#/add">Add your first coffee</a>
         <p class="small" style="margin-top:18px">Just want to look around? <a class="linkish" href="#/settings">Load demo data</a></p>
       </div>`;
@@ -175,83 +175,117 @@ function resolveOrder(choice) {
 }
 
 function viewAdd() {
-  const state = { items: new Map(), order: store.recentOrder()?.id || 'new' };
+  const state = { picked: new Set(), links: new Map(), order: store.recentOrder()?.id || 'new', q: '' };
   $view.innerHTML = `
-    <div class="top"><div><h1>Add coffee</h1><div class="sub">Paste one or more crossroast.be links</div></div></div>
-    <div class="paste-box">
-      <input class="input" id="link" type="url" inputmode="url" placeholder="https://www.crossroast.be/product/…" autocomplete="off">
-      <button class="btn soft" id="pasteBtn" aria-label="Paste">${ICON.paste}Paste</button>
-    </div>
-    <div id="results" class="stack" style="margin-top:14px"></div>
-    <div id="actions" class="stack hidden" style="margin-top:14px">
-      <label class="field"><span>Order</span><select class="select" id="order">${orderOptions(state.order)}</select></label>
-      <button class="btn primary block" id="addBtn">Add & rate</button>
-    </div>
-    <p class="small muted" style="margin-top:22px">Tip: paste several links at once to add a whole order in one go.<br>
-    Link not working? <a class="linkish" href="#/edit/new">Enter a coffee manually</a></p>`;
-  const $link = $view.querySelector('#link');
+    <div class="top"><div><h1>Add coffee</h1><div class="sub">Tap the coffees you ordered</div></div></div>
+    <div class="search">${ICON.search}<input class="input" id="q" type="search" placeholder="Search the Cross Roast shop…" autocomplete="off"></div>
+    <div id="shopPick" class="list" style="margin-top:6px"></div>
+    <details class="card pad" style="margin:16px 0 70px" id="linkBox">
+      <summary class="small" style="font-weight:600;cursor:pointer">Not in the shop anymore? Paste a link</summary>
+      <div class="paste-box" style="margin-top:12px">
+        <input class="input" id="link" type="url" inputmode="url" placeholder="https://www.crossroast.be/product/…" autocomplete="off">
+        <button class="btn soft" id="pasteBtn" aria-label="Paste">${ICON.paste}Paste</button>
+      </div>
+      <div id="results" class="stack" style="margin-top:12px"></div>
+      <p class="small muted" style="margin:10px 0 0">No link at all? <a class="linkish" href="#/edit/new">Enter a coffee manually</a></p>
+    </details>
+    <div class="pick-bar hidden" id="actions">
+      <select class="select" id="order">${orderOptions(state.order)}</select>
+      <button class="btn primary" id="addBtn">Add</button>
+    </div>`;
+  const $pick = $view.querySelector('#shopPick');
   const $results = $view.querySelector('#results');
   const $actions = $view.querySelector('#actions');
   const $addBtn = $view.querySelector('#addBtn');
+  let catalog = null;
 
-  const draw = () => {
-    const items = [...state.items.values()];
-    $results.innerHTML = items.map((it) => {
+  const chosen = () => {
+    const fromShop = (catalog || []).filter((c) => state.picked.has(c.slug));
+    const fromLinks = [...state.links.values()].filter((i) => i.status === 'ok' && !state.picked.has(i.coffee.slug)).map((i) => i.coffee);
+    return [...fromShop, ...fromLinks].filter((c) => !store.findBySlug(c.slug));
+  };
+  const updateBar = () => {
+    const n = chosen().length;
+    $actions.classList.toggle('hidden', !n);
+    $addBtn.textContent = n > 1 ? `Add ${n} coffees` : 'Add & rate';
+  };
+
+  const drawShop = () => {
+    if (!catalog) return;
+    const q = state.q.trim().toLowerCase();
+    const rows = catalog
+      .filter((c) => c.inStock !== false)
+      .filter((c) => !q || [c.name, c.processText, ...(c.countries || []), ...(c.notes || [])].join(' ').toLowerCase().includes(q))
+      .map((c) => ({ c, ex: store.findBySlug(c.slug) }))
+      .sort((a, b) => (a.ex ? 1 : 0) - (b.ex ? 1 : 0));
+    $pick.innerHTML = rows.map(({ c, ex }) => {
+      const on = state.picked.has(c.slug);
+      return ex
+        ? `<a class="card item tasted" href="#/coffee/${ex.id}">${coffeeImg(c)}<div class="grow"><div class="name ellipsis">${esc(c.name)}</div>
+            <div class="meta ellipsis">${esc(procLine(c))}</div><div style="margin-top:4px">${verdictTag(groupScore(ex, people()))} <span class="small muted">already tasted</span></div></div>${scoreBadge(groupScore(ex, people()))}</a>`
+        : `<button class="card item pick ${on ? 'on' : ''}" data-slug="${esc(c.slug)}">${coffeeImg(c)}<div class="grow"><div class="name ellipsis">${esc(c.name)}</div>
+            <div class="meta ellipsis">${esc(procLine(c))}</div><div class="meta ellipsis" style="color:var(--ink-2)">${esc(c.notes.join(' · '))}</div></div>
+            <span class="check" aria-hidden="true"></span></button>`;
+    }).join('') || '<div class="small muted">Nothing matches.</div>';
+  };
+
+  $pick.innerHTML = `<div class="card preview"><div class="spinner"></div><div class="status-line">Loading the Cross Roast shop…</div></div>`;
+  fetchCatalog()
+    .then((items) => { catalog = items; shopState.items = items; drawShop(); })
+    .catch(() => { $pick.innerHTML = `<div class="error">Could not load the shop. Paste a link below instead.</div>`; $view.querySelector('#linkBox').open = true; });
+
+  $pick.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-slug]');
+    if (!b) return;
+    const s = b.dataset.slug;
+    state.picked.has(s) ? state.picked.delete(s) : state.picked.add(s);
+    b.classList.toggle('on', state.picked.has(s));
+    updateBar();
+  });
+  $view.querySelector('#q').addEventListener('input', (e) => { state.q = e.target.value; drawShop(); });
+
+  // link fallback
+  const drawLinks = () => {
+    $results.innerHTML = [...state.links.values()].map((it) => {
       if (it.status === 'loading') return `<div class="card preview"><div class="spinner"></div><div class="grow status-line">Reading ${esc(it.slug)}…</div></div>`;
       if (it.status === 'error') return `<div class="card preview"><div class="grow"><div class="error">${esc(it.slug)}: ${esc(it.error)}</div>
         <a class="linkish small" href="#/edit/new?url=${encodeURIComponent('https://www.crossroast.be/product/' + it.slug + '/')}">Enter manually instead</a></div></div>`;
-      const c = it.coffee;
-      const ex = store.findBySlug(c.slug);
-      return `<div class="card preview">${coffeeImg(c)}<div class="grow">
-          <div style="font-weight:600">${esc(c.name)}</div>
+      const c = it.coffee, ex = store.findBySlug(c.slug);
+      return `<div class="card preview">${coffeeImg(c)}<div class="grow"><div style="font-weight:600">${esc(c.name)}</div>
           <div class="small muted">${esc(procLine(c))}</div>
-          <div class="chips" style="margin-top:6px">${c.notes.map((n) => `<span class="chip note">${esc(n)}</span>`).join('')}</div>
-          ${ex ? `<div class="small" style="margin-top:6px"><span class="tag ok">Already tasted</span> <a class="linkish" href="#/coffee/${ex.id}">Open it</a></div>` : ''}
-        </div></div>`;
+          ${ex ? `<div class="small" style="margin-top:6px"><span class="tag ok">Already tasted</span> <a class="linkish" href="#/coffee/${ex.id}">Open it</a></div>` : ''}</div></div>`;
     }).join('');
-    const ready = items.filter((i) => i.status === 'ok' && !store.findBySlug(i.coffee.slug));
-    $actions.classList.toggle('hidden', !ready.length);
-    $addBtn.textContent = ready.length > 1 ? `Add all ${ready.length} coffees` : 'Add & rate';
+    updateBar();
   };
-
   const handle = (text) => {
     const slugs = findLinks(text);
-    if (!slugs.length) {
-      if (text.trim()) $results.innerHTML = `<div class="error">That doesn't look like a crossroast.be product link.</div>`;
-      return;
-    }
+    if (!slugs.length) { if (text.trim()) $results.innerHTML = `<div class="error">That doesn't look like a crossroast.be product link.</div>`; return; }
     for (const slug of slugs) {
-      if (state.items.has(slug)) continue;
-      state.items.set(slug, { slug, status: 'loading' });
+      if (state.links.has(slug)) continue;
+      state.links.set(slug, { slug, status: 'loading' });
       fetchProduct(slug)
-        .then((coffee) => state.items.set(slug, { slug, status: 'ok', coffee }))
-        .catch((e) => state.items.set(slug, { slug, status: 'error', error: e.message || 'Could not read this page.' }))
-        .finally(draw);
+        .then((coffee) => state.links.set(slug, { slug, status: 'ok', coffee }))
+        .catch((e) => state.links.set(slug, { slug, status: 'error', error: e.message || 'Could not read this page.' }))
+        .finally(drawLinks);
     }
-    draw();
+    drawLinks();
   };
-
+  const $link = $view.querySelector('#link');
   $link.addEventListener('input', () => handle($link.value));
   $view.querySelector('#pasteBtn').addEventListener('click', async () => {
-    try {
-      const t = await navigator.clipboard.readText();
-      $link.value = t.trim();
-      handle(t);
-    } catch {
-      $link.focus();
-      toast('Long-press the field to paste');
-    }
+    try { const t = await navigator.clipboard.readText(); $link.value = t.trim(); handle(t); }
+    catch { $link.focus(); toast('Long-press the field to paste'); }
   });
+
   $view.querySelector('#order').addEventListener('change', (e) => (state.order = e.target.value));
   $addBtn.addEventListener('click', () => {
-    const ready = [...state.items.values()].filter((i) => i.status === 'ok' && !store.findBySlug(i.coffee.slug));
-    if (!ready.length) return;
+    const list = chosen();
+    if (!list.length) return;
     const orderId = resolveOrder(state.order);
-    const added = ready.map((i) => store.addCoffee(i.coffee, orderId).coffee);
+    const added = list.map((c) => store.addCoffee(c, orderId).coffee);
     toast(added.length > 1 ? `${added.length} coffees added` : 'Added');
     location.hash = added.length === 1 ? `#/coffee/${added[0].id}?new=1` : orderId ? `#/order/${orderId}` : '#/';
   });
-  setTimeout(() => $link.focus(), 50);
 }
 
 // ---------------------------------------------------------------- rating bar

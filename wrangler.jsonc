@@ -1,0 +1,11 @@
+// Cloudflare configuration: tells Cloudflare where the app lives, so no dashboard settings are needed.
+{
+  "name": "coffee",
+  "main": "src/worker.js",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  }
+}
