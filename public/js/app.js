@@ -191,7 +191,7 @@ function render() {
   location.hash = '#/';
 }
 const query = () => new URLSearchParams(location.hash.split('?')[1] || '');
-window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
+window.addEventListener('hashchange', () => { render(); $view.scrollTop = 0; });
 const goBack = (fallback) => (history.length > 1 ? history.back() : (location.hash = fallback));
 
 // ================================================================ coffees list
