@@ -167,7 +167,12 @@ export function describeReason(r) {
     case 'family': return `${familyLabel(r.value)} notes (${sign})`;
     case 'type': return `${r.value} (${sign})`;
     case 'altitude': return `Grown at ${r.value} (${sign})`;
-    default: return `${r.value} ${r.dim} (${sign})`;
+    default: {
+      const a = ATTRIBUTES.find((x) => x.key === r.dim);
+      if (!a) return `${r.value} ${r.dim} (${sign})`;
+      const word = r.value === 'low' ? a.low : r.value === 'high' ? a.high : 'medium';
+      return `${word.charAt(0).toUpperCase() + word.slice(1)} ${a.label.toLowerCase()} (${sign})`;
+    }
   }
 }
 

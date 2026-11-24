@@ -6,11 +6,11 @@ Een webapp voor Dauwe, Reinoud en Walter om de koffies van [Cross Roast](https:/
 
 | Scherm | Wat |
 |---|---|
-| **Coffees** | Alle gedronken koffies, met de score van iedereen. Zoeken, filteren (Reorder / Skip / proces) en sorteren. |
-| **＋ (Add)** | Tik de koffies aan die je bestelde, rechtstreeks uit het huidige Cross Roast-aanbod, en alles wordt ingevuld (land, proces, variëteit, hoogte, smaaknoten, foto, verhaal). Staat een koffie niet meer op de site, plak dan de link of vul hem manueel in. Daarna scoren, 1–10 met halve punten. De laatste score telt. |
-| **Taste** | Smaakprofiel van de crew of per persoon: samenvatting in gewone taal, top 10, "niet meer bestellen", smaakkaart, proces, aciditeit/body/zoetheid/bitterheid, smaakfamilies, landen, hoogte, wie het strengst scoort en wie op wie lijkt. |
-| **Shop** | Plak een link om te checken of jullie een koffie lekker zouden vinden. Toont ook het huidige aanbod van Cross Roast, gesorteerd op verwachte score, met "Reorder" bij koffies die jullie al goed vonden. |
-| **Orders** | Elke bestelling (3–5 koffies) als groep, met datum en notitie. |
+| **Coffees** | Alle gedronken koffies met ieders score. Zoeken, filteren (Reorder/Skip, single origin/blend, continent) en sorteren. Swipe naar links om te verwijderen. |
+| **Taste** | Smaakprofiel van de crew of per persoon: samenvatting, top 10, "niet meer bestellen", smaakkaart, proces, aciditeit/body/zoetheid/bitterheid, smaken, herkomst, wie op wie lijkt. |
+| **＋** | Tik de koffies aan die je bestelde, uit het huidige Cross Roast-aanbod. Ze gaan in je laatste bestelling of een nieuwe. Een link plakken of manueel invullen kan voor koffies die niet meer op de site staan. |
+| **Shop** | Het huidige aanbod met filters. Al geproefde koffies tonen jullie score; nieuwe tonen een verwachte score "for you". Tik voor een volledige fiche met voorspelling per persoon. Onder **Our orders** staan jullie bestellingen. |
+| **Settings** | Crew, demodata, uitleg over de schattingen, gegevens wissen. |
 
 Alles werkt **zonder AI en volledig gratis**: de smaakanalyse gebruikt een ingebouwde woordenlijst (bv. "limoen" → citrus → meer aciditeit) en eenvoudige statistiek.
 

@@ -141,3 +141,16 @@ export function parseProduct(p) {
     inStock: p.in_stock ?? null,
   };
 }
+
+// Regions as Cross Roast groups them on its site.
+const REGION = {
+  Africa: ['Ethiopia', 'Kenya', 'Burundi', 'Rwanda', 'Uganda', 'Tanzania', 'Malawi', 'DR Congo', 'Zambia', 'Zimbabwe'],
+  'Central America': ['El Salvador', 'Guatemala', 'Costa Rica', 'Honduras', 'Nicaragua', 'Panama', 'Mexico'],
+  'South America': ['Colombia', 'Peru', 'Brazil', 'Bolivia', 'Ecuador'],
+  Asia: ['Indonesia', 'India', 'China', 'Vietnam', 'Yemen', 'Myanmar', 'Thailand'],
+  Oceania: ['Papua New Guinea', 'Australia'],
+};
+export const REGIONS = Object.keys(REGION);
+export function regionsOf(coffee) {
+  return [...new Set((coffee.countries || []).map((c) => REGIONS.find((r) => REGION[r].includes(c))).filter(Boolean))];
+}
