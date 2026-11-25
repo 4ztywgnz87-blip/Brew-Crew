@@ -97,3 +97,17 @@ export async function fetchCatalog(force = false) {
   try { localStorage.setItem(CAT_KEY, JSON.stringify({ at: Date.now(), items })); } catch {}
   return items;
 }
+
+// Builds a fresh Cross Roast cart with these coffees and returns the link that opens it.
+export async function buildCart(slugs, { size, grind }) {
+  const res = await fetch('/api/cart', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items: slugs.map((slug) => ({ slug })), size, grind }),
+  });
+  const type = res.headers.get('content-type') || '';
+  if (!type.includes('json')) throw new Error('The cart service is only available in the online app.');
+  const data = await res.json();
+  if (!res.ok) throw Object.assign(new Error(data.error || 'Could not build the cart.'), { failed: data.failed });
+  return data;
+}

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { parseProduct, parseProcess, parseAltitude, decode, canonicalNote, canonicalNotes, regionsOf } from '../public/js/parse.js';
+import { parseProduct, parseProcess, parseAltitude, decode, canonicalNote, canonicalNotes, regionsOf, varietiesOf } from '../public/js/parse.js';
 import { slugFromUrl } from '../functions/_lib/crossroast.js';
 import { findLinks } from '../public/js/api.js';
 
@@ -87,4 +87,13 @@ test('regions like on crossroast.be', () => {
   assert.deepEqual(regionsOf({ countries: ['Brazil', 'Guatemala'] }), ['South America', 'Central America']);
   assert.deepEqual(regionsOf({ countries: ['Papua New Guinea'] }), ['Oceania']);
   for (const p of cat) { const c = parseProduct(p); assert.ok(regionsOf(c).length, c.name); }
+});
+
+test('varieties are split and normalised', () => {
+  assert.deepEqual(varietiesOf({ variety: '100% Arabica: Abyssinia – Ateng – caturra' }), ['Abyssinia', 'Ateng', 'Caturra']);
+  assert.deepEqual(varietiesOf({ variety: 'Red bourbon' }), ['Bourbon']);
+  assert.deepEqual(varietiesOf({ variety: 'SL28 – SL34' }), ['SL28', 'SL34']);
+  assert.deepEqual(varietiesOf({ variety: 'Hybrid 1 + 2' }), ['Hybrid 1 + 2']);
+  assert.deepEqual(varietiesOf({ variety: 'Gesha' }), ['Geisha']);
+  assert.deepEqual(varietiesOf({}), []);
 });

@@ -192,3 +192,17 @@ export function canonicalNote(note) {
   return k.charAt(0).toUpperCase() + k.slice(1);
 }
 export const canonicalNotes = (notes) => [...new Set((notes || []).map(canonicalNote).filter(Boolean))];
+
+// "100% Arabica: Abyssinia – Ateng – caturra" → ['Abyssinia', 'Ateng', 'Caturra']
+const VARIETY_ALIAS = { gesha: 'Geisha', geisha: 'Geisha', 'red bourbon': 'Bourbon', 'yellow bourbon': 'Bourbon', 'bourbon rojo': 'Bourbon', catuaí: 'Catuai', 'sl-28': 'SL28', 'sl 28': 'SL28', 'sl-34': 'SL34', 'sl 34': 'SL34', 'jarc varieties': 'JARC', 'local landraces': 'Ethiopian landraces', heirloom: 'Ethiopian landraces' };
+export function varietiesOf(coffee) {
+  const raw = String(coffee.variety || '').replace(/^\s*\d+%\s*arabica\s*:?/i, '');
+  if (!raw.trim()) return [];
+  const list = raw.split(/\s+[–—-]\s+|,|\/|\s+en\s+|\s+and\s+/i).map((v) => v.trim()).filter((v) => v.length > 1);
+  return [...new Set(list.map((v) => {
+    const k = v.toLowerCase();
+    if (VARIETY_ALIAS[k]) return VARIETY_ALIAS[k];
+    if (/^sl\s?-?\d+$/i.test(v)) return v.toUpperCase().replace(/[\s-]/g, '');
+    return v.replace(/\b\w/g, (ch) => ch.toUpperCase());
+  }))];
+}

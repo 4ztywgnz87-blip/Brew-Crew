@@ -16,7 +16,12 @@ http.createServer(async (req, res) => {
     const file = path.join(root, 'functions', url.pathname.replace(/\/$/, '') + '.js');
     if (!fs.existsSync(file)) { res.writeHead(404).end('{}'); return; }
     const mod = await import(pathToFileURL(file).href);
-    const r = await mod.onRequestGet({ request: new Request(url) });
+    let r;
+    if (req.method === 'POST' && mod.onRequestPost) {
+      const chunks = []; for await (const c of req) chunks.push(c);
+      r = await mod.onRequestPost({ request: new Request(url, { method: 'POST', body: Buffer.concat(chunks), headers: { 'Content-Type': 'application/json' } }) });
+    } else if (mod.onRequestGet) r = await mod.onRequestGet({ request: new Request(url) });
+    else { res.writeHead(405).end('{}'); return; }
     res.writeHead(r.status, Object.fromEntries(r.headers));
     res.end(Buffer.from(await r.arrayBuffer()));
     return;

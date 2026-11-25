@@ -19,6 +19,7 @@ function fresh() {
     ],
     coffees: [],
     orders: [],
+    settings: { size: '250-gram', grind: 'maling-bialetti' },
   };
 }
 
@@ -36,6 +37,7 @@ function load() {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const data = { ...fresh(), ...JSON.parse(raw) };
+      data.settings = { ...fresh().settings, ...(data.settings || {}) };
       data.coffees.forEach(normalizeCoffee);
       return data;
     }
@@ -246,4 +248,9 @@ export function importData(text) {
   db.coffees.forEach(normalizeCoffee);
   save();
   return db.coffees.length;
+}
+
+export function updateSettings(patch) {
+  db.settings = { ...(db.settings || {}), ...patch };
+  save();
 }

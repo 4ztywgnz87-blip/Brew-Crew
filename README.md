@@ -8,8 +8,8 @@ Een webapp voor Dauwe, Reinoud en Walter om de koffies van [Cross Roast](https:/
 |---|---|
 | **Coffees** | Alle koffies met ieders score. Bovenaan staat hoeveel koffies nog een score nodig hebben; op een fiche brengt **Next to score** je meteen naar de volgende. Zoeken, filteren (Reorder/Skip, single origin/blend, continent) en sorteren. Swipe naar links om te verwijderen. |
 | **Taste** | Smaakprofiel van de crew of per persoon: samenvatting, top 10, "niet meer bestellen", smaakkaart, proces, aciditeit/body/zoetheid/bitterheid, smaken, herkomst, wie op wie lijkt. |
-| **Shop** | Het huidige aanbod van Cross Roast met filters. Tik op een koffie voor de fiche met verwachte score per persoon; tik op het rondje om hem aan te vinken en voeg je selectie toe aan je laatste of een nieuwe bestelling. Ook al geproefde koffies kan je zo opnieuw bestellen. Onder **Our orders** staan jullie bestellingen. |
-| **Settings** | Crew, demodata, uitleg over de schattingen, **back-up bewaren en terugzetten**, gegevens wissen. |
+| **Shop** | Het huidige aanbod van Cross Roast met filters. Tik op een koffie voor de fiche met verwachte score per persoon; tik op het rondje om hem aan te vinken en voeg je selectie toe aan je laatste of een nieuwe bestelling. Ook al geproefde koffies kan je zo opnieuw bestellen. Onder **Our orders** staan jullie bestellingen; met **Put in Cross Roast cart** opent een bestelling meteen in de winkelmand op crossroast.be (de vorige winkelmand wordt vervangen). |
+| **Settings** | Crew, standaard zakgrootte en maling voor de winkelmand, demodata, uitleg over de schattingen, **back-up bewaren en terugzetten**, gegevens wissen. |
 
 Alles werkt **zonder AI en volledig gratis**: de smaakanalyse gebruikt een ingebouwde woordenlijst (bv. "limoen" → citrus → meer aciditeit) en eenvoudige statistiek.
 
@@ -35,7 +35,7 @@ Ga naar ⚙️ (rechtsboven op Coffees) → **Load demo data**: 14 echte Cross R
 ## Hoe het technisch werkt (voor later)
 
 - `public/`: de app zelf (HTML, CSS en JavaScript, geen build-stap)
-- `src/worker.js` + `functions/api/`: kleine Cloudflare-functies die de productgegevens van crossroast.be ophalen (de browser mag dat niet rechtstreeks). Ze praten enkel met crossroast.be.
+- `src/worker.js` + `functions/api/`: kleine Cloudflare-functies die de productgegevens van crossroast.be ophalen en een winkelmand voor je klaarzetten (de browser mag dat niet rechtstreeks). Ze praten enkel met crossroast.be.
 - Lukt de eigen functie niet (bv. lokaal geopend), dan probeert de app automatisch gratis publieke tussendiensten. Lukt ook dat niet, dan kan je een koffie manueel invullen.
 - `tests/`: automatische tests (`npm test`); `tools/dev-server.mjs` start een lokale versie (`npm run dev`).
 

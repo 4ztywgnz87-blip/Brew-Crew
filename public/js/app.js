@@ -1,6 +1,6 @@
 import * as store from './store.js';
 import { db } from './store.js';
-import { fetchProduct, fetchCatalog, findLinks } from './api.js';
+import { fetchProduct, fetchCatalog, findLinks, buildCart } from './api.js';
 import { regionsOf, REGIONS, canonicalNotes } from './parse.js';
 import { estimateAttributes, familiesOf, familyLabel, ATTRIBUTES } from './flavor.js';
 import {
@@ -753,6 +753,9 @@ function viewTaste() {
     <div class="section"><div class="section-head"><h2>Where it’s from</h2></div>
       <div class="card pad">${bars(regionRows)}</div></div>
 
+    <div class="section"><div class="section-head"><h2>Variety</h2><span class="hint">the coffee plant · avg score · ×count</span></div>
+      <div class="card pad">${bars(prefs.dims.variety, (v) => v, 10)}</div></div>
+
     ${subject === 'group' ? crewBlock() : ''}
 
     <details class="section more">
@@ -1007,6 +1010,43 @@ async function viewShopItem(slug) {
   });
 }
 
+// ---- Cross Roast cart
+const GRINDS = [
+  ['maling-bialetti', 'Bialetti (moka pot)'], ['hele-bonen', 'Whole beans'], ['espresso-thuis-machine', 'Espresso (home machine)'],
+  ['espresso', 'Espresso (pro machine)'], ['aeropress-maling', 'AeroPress'], ['v60-maling', 'V60'], ['filter', 'Filter'],
+  ['chemex-maling', 'Chemex'], ['maling-clever', 'Clever'], ['grof-cafetiere-french-press', 'French press'],
+];
+const SIZES = [['250-gram', '250 g'], ['500-gram', '500 g']];
+const cartSettings = () => ({ size: '250-gram', grind: 'maling-bialetti', ...(db.settings || {}) });
+const label = (list, v) => (list.find((x) => x[0] === v) || [, v])[1];
+
+async function sendToCart(coffees, $btn) {
+  const set = cartSettings();
+  const slugs = coffees.filter((c) => !c.slug.startsWith('manual-')).map((c) => c.slug);
+  if (!slugs.length) { toast('No Cross Roast coffees in this order'); return; }
+  const ok = await ask({
+    title: 'Open in Cross Roast?',
+    text: `Your Cross Roast cart is emptied and filled with these ${slugs.length} coffee${slugs.length === 1 ? '' : 's'} (${label(SIZES, set.size)}, ${label(GRINDS, set.grind)} grind). You can still change everything on the site before paying.`,
+    ok: 'Open cart', danger: false,
+  });
+  if (!ok) return;
+  const txt = $btn.textContent;
+  $btn.disabled = true; $btn.innerHTML = '<span class="spinner" style="width:18px;height:18px;border-width:2px"></span> Filling your cart…';
+  try {
+    const res = await buildCart(slugs, set);
+    if (res.failed?.length) {
+      const names = res.failed.map((f) => coffees.find((c) => c.slug === f.slug)?.name || f.slug).join(', ');
+      const go = await ask({ title: 'Not everything is available', text: `Could not add: ${names} (probably sold out). Open the cart with the other coffees?`, ok: 'Open cart', danger: false });
+      if (!go) return;
+    }
+    location.href = res.url;
+  } catch (e) {
+    toast(e.message || 'Could not reach Cross Roast');
+  } finally {
+    $btn.disabled = false; $btn.textContent = txt;
+  }
+}
+
 // ================================================================ orders (under Shop)
 function viewOrders() {
   $view.innerHTML = `
@@ -1043,9 +1083,12 @@ function viewOrder(id) {
     <div class="list">${cs.map((c) => { const s = groupScore(c, people()); return `
       <a class="card item" href="#/coffee/${c.id}">${coffeeImg(c)}<div class="grow">${nameHtml(c)}
       <div class="meta">${esc(procLine(c))}</div><div class="people">${personScoresLine(c)}</div></div>${scoreBadge(s)}</a>`; }).join('') || '<div class="small muted">No coffees in this order yet.</div>'}</div>
+    ${cs.length ? `<div class="section"><button class="btn primary block" id="toCart">Put in Cross Roast cart</button>
+      <div class="small muted" style="text-align:center;margin-top:6px">${esc(label(SIZES, cartSettings().size))} · ${esc(label(GRINDS, cartSettings().grind))} grind · <a class="linkish" href="#/settings">change</a></div></div>` : ''}
     <label class="field section"><span>Order note</span><textarea class="textarea" id="note" placeholder="e.g. price paid, who ordered">${esc(o.note || '')}</textarea></label>
     <div class="section" style="text-align:center"><button class="linkish danger-link" id="del">Delete this order</button></div>`;
   $view.querySelector('#back').addEventListener('click', () => (location.hash = '#/orders'));
+  $view.querySelector('#toCart')?.addEventListener('click', (e) => sendToCart(cs, e.currentTarget));
   $view.querySelector('#date').addEventListener('change', (e) => { if (e.target.value) { store.updateOrder(o.id, { date: e.target.value }); toast('Saved'); viewOrder(id); } });
   $view.querySelector('#note').addEventListener('change', (e) => { store.updateOrder(o.id, { note: e.target.value }); toast('Saved'); });
   $view.querySelector('#del').addEventListener('click', async () => {
@@ -1062,6 +1105,12 @@ function viewSettings() {
       <div class="card pad stack">
         ${people().map((p) => `<div class="row"><input class="input" data-p="${p.id}" value="${esc(p.name)}"><button class="linkish danger-link small" data-rm="${p.id}">Remove</button></div>`).join('')}
         <div class="row"><input class="input" id="newName" placeholder="New crew member"><button class="btn sm soft" id="addP">Add</button></div>
+      </div></div>
+    <div class="section"><div class="section-head"><h2>Cross Roast cart</h2></div>
+      <div class="card pad stack">
+        <p class="small muted" style="margin:0">Used when you put an order in the Cross Roast cart.</p>
+        <label class="field"><span>Bag size</span><div class="seg small" id="sizeSeg">${SIZES.map(([v, l]) => `<button data-size="${v}" class="${cartSettings().size === v ? 'on' : ''}">${l}</button>`).join('')}</div></label>
+        <label class="field"><span>Grind</span><select class="select" id="grindSel">${GRINDS.map(([v, l]) => `<option value="${v}" ${cartSettings().grind === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
       </div></div>
     <div class="section"><div class="section-head"><h2>Try it out</h2></div>
       <div class="card pad stack">
@@ -1096,6 +1145,15 @@ function viewSettings() {
     location.hash = '#/taste';
   });
   $view.querySelector('#rmDemo')?.addEventListener('click', () => { store.removeDemo(); toast('Demo data removed'); viewSettings(); });
+  $view.querySelector('#sizeSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-size]');
+    if (!b) return;
+    e.preventDefault();
+    store.updateSettings({ size: b.dataset.size });
+    $view.querySelectorAll('#sizeSeg button').forEach((x) => x.classList.toggle('on', x === b));
+    toast('Saved');
+  });
+  $view.querySelector('#grindSel').addEventListener('change', (e) => { store.updateSettings({ grind: e.target.value }); toast('Saved'); });
   $view.querySelector('#backup').addEventListener('click', async () => {
     const name = `brew-crew-backup-${new Date().toISOString().slice(0, 10)}.json`;
     const file = new File([store.exportData()], name, { type: 'application/json' });

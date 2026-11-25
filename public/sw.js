@@ -2,7 +2,7 @@
 // App files: always fetched fresh when online (so closing and reopening the app is enough
 // to get a new version); the cached copy is only used when there is no connection.
 // Fonts and coffee photos: served from cache first (they never change).
-const VERSION = 'brewcrew-v1.6.2';
+const VERSION = 'brewcrew-v1.7.0';
 const SHELL = ['./', 'index.html', 'css/app.css', 'js/app.js', 'js/store.js', 'js/api.js', 'js/parse.js', 'js/flavor.js', 'js/analysis.js', 'js/demo.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {

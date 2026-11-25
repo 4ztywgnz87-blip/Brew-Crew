@@ -1,4 +1,5 @@
 // Taste analysis: turns scores into preferences and predictions. Pure functions, no AI.
+import { varietiesOf } from './parse.js';
 import { familiesOf, estimateAttributes, ATTRIBUTES, bucket, altitudeBand, familyLabel, FAMILIES } from './flavor.js';
 
 export const REORDER_AT = 7.5;
@@ -39,6 +40,7 @@ export function features(coffee) {
   const ferm = (coffee.modifiers || []).filter((m) => m !== 'Decaf');
   out.push({ dim: 'fermentation', value: ferm.length ? ferm[0] : 'Classic' });
   for (const c of coffee.countries || []) out.push({ dim: 'country', value: c });
+  for (const v of varietiesOf(coffee)) out.push({ dim: 'variety', value: v });
   for (const f of familiesOf(coffee)) out.push({ dim: 'family', value: f });
   for (const n of coffee.notes || []) out.push({ dim: 'note', value: n.toLowerCase() });
   for (const a of ATTRIBUTES) out.push({ dim: a.key, value: bucket(attrs[a.key]) });
@@ -132,7 +134,7 @@ export function confidence(n) {
   return { level: 3, label: 'Solid', text: 'Enough coffees for a reliable picture.' };
 }
 
-const WEIGHTS = { process: 0.3, fermentation: 0.15, country: 0.15, family: 0.35, note: 0.1, acidity: 0.2, sweetness: 0.1, body: 0.15, bitterness: 0.15, altitude: 0.05, type: 0.1 };
+const WEIGHTS = { variety: 0.1, process: 0.3, fermentation: 0.15, country: 0.15, family: 0.35, note: 0.1, acidity: 0.2, sweetness: 0.1, body: 0.15, bitterness: 0.15, altitude: 0.05, type: 0.1 };
 
 // Predict a score for a (new) coffee, with explanations.
 export function predict(coffee, coffees, subject, people) {
@@ -165,6 +167,7 @@ export function describeReason(r) {
     case 'process': return `${r.value} process (${sign})`;
     case 'fermentation': return r.value === 'Classic' ? `Classic fermentation (${sign})` : `${r.value} (${sign})`;
     case 'country': return `From ${r.value} (${sign})`;
+    case 'variety': return `${r.value} variety (${sign})`;
     case 'family': return `${familyLabel(r.value)} notes (${sign})`;
     case 'type': return `${r.value} (${sign})`;
     case 'altitude': return `Grown at ${r.value} (${sign})`;
