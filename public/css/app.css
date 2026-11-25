@@ -401,7 +401,9 @@ button.item { width: 100%; text-align: left; font: inherit; color: inherit; }
 .pick-bar { bottom: calc(84px + var(--safe-b)); }
 
 /* ---------- review round: polish ---------- */
-.hero { aspect-ratio: 16 / 11; max-height: 250px; }
+.hero { aspect-ratio: auto; height: 250px; max-height: none; background: #FFFFFF; }
+/* Show the whole bag (no cropping), smaller, with room below so the label stays above the name card. */
+.hero img { object-fit: contain; object-position: center top; padding: 18px 0 46px; }
 .rbar .ticks span.half { color: var(--ink); background: linear-gradient(90deg, transparent 50%, rgba(255, 255, 255, .55) 50%); }
 .select { font-size: 16px; }
 
