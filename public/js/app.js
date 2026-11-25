@@ -116,7 +116,7 @@ function personScoresLine(c) {
 // ---- search + filter panel (type + region, like on crossroast.be)
 const FILTER_GROUPS = {
   verdict: { title: 'Score', options: [['reorder', 'Reorder'], ['ok', 'Okay'], ['skip', 'Skip'], ['unrated', 'Not rated']] },
-  hide: { title: 'Show', options: [['tasted', 'Only coffees we haven’t tasted']] },
+  status: { title: 'Status', options: [['new', 'Not tasted'], ['tasted', 'Tasted']] },
   region: { title: 'Region', options: REGIONS.map((r) => [r, r]) },
   type: { title: 'Type', options: [['Single origin', 'Single origin'], ['Blend', 'Blend']] },
 };
@@ -238,7 +238,7 @@ function viewCoffees() {
         <div class="thumbs">${toRate.slice(0, 3).map((c) => coffeeImg(c, 'thumb xs')).join('')}</div>
         <div class="grow"><b>${toRate.length === 1 ? '1 coffee needs' : `${toRate.length} coffees need`} a score</b><span>Tap to start scoring</span></div>
         <span class="arrow">→</span></a>` : ''}
-    ${searchBar(listState, 'Search name, country, note…', ['verdict', 'region', 'type'])}
+    ${searchBar(listState, 'Search name, country, note…', ['verdict', 'type', 'region'])}
     <div class="row" style="margin-top:8px;justify-content:space-between">
       <span class="small muted" id="count"></span>
       <select class="select" id="sort" style="width:auto;padding:6px 10px;border-radius:11px">
@@ -286,7 +286,7 @@ function viewCoffees() {
     return false;
   });
   $view.querySelector('#sort').addEventListener('change', (e) => { listState.sort = e.target.value; draw(); });
-  bindSearch(listState, ['verdict', 'region', 'type'], draw);
+  bindSearch(listState, ['verdict', 'type', 'region'], draw);
 }
 
 // Swipe left on .swipe > .card to reveal the delete button.
@@ -815,7 +815,7 @@ function radarSvg(data) {
 }
 
 // ================================================================ shop
-const shopState = { items: null, loading: false, error: null, hide: null, q: '', type: null, region: null };
+const shopState = { items: null, loading: false, error: null, status: null, q: '', type: null, region: null };
 
 function shopTabs(active) {
   return `<div class="seg" style="margin-bottom:14px"><button data-go="#/shop" class="${active === 'shop' ? 'on' : ''}">Shop</button><button data-go="#/orders" class="${active === 'orders' ? 'on' : ''}">Our orders</button></div>`;
@@ -852,7 +852,7 @@ function viewShop() {
   $view.innerHTML = `
     <div class="top"><div><div class="eyebrow">Cross Roast</div><h1>Shop</h1></div><button class="btn sm ghost" id="reload">Refresh</button></div>
     ${shopTabs('shop')}
-    ${searchBar(shopState, 'Search the shop…', ['hide', 'region', 'type'])}
+    ${searchBar(shopState, 'Search the shop…', ['status', 'type', 'region'])}
     <div class="small muted" style="margin:2px 2px 0">Tap a coffee for details · tap <span class="mini-circle"></span> to add it to an order</div>
     ${nScored < 3 ? `<div class="card notice" style="margin-top:10px">Score ${3 - nScored} more coffee${3 - nScored === 1 ? '' : 's'} to see how much you’ll probably like each one.</div>` : ''}
     <div id="catalog" class="list"></div>
@@ -860,7 +860,7 @@ function viewShop() {
     <div class="pick-bar hidden" id="actions">${destPicker()}<button class="btn primary block" id="addBtn">Add</button></div>`;
   bindShopTabs();
   $view.querySelector('#reload').addEventListener('click', () => loadCatalog(true));
-  bindSearch(shopState, ['hide', 'region', 'type'], drawCatalog);
+  bindSearch(shopState, ['status', 'type', 'region'], drawCatalog);
 
   $view.querySelector('#catalog').addEventListener('click', (e) => {
     const b = e.target.closest('[data-pick]');
@@ -927,7 +927,8 @@ function drawCatalog() {
       const p = predict(c, db.coffees, 'group', ps);
       return { c, val: p.score, pred: p, tasted: false };
     });
-  if (shopState.hide === 'tasted') rows = rows.filter((r) => !r.tasted);
+  if (shopState.status === 'new') rows = rows.filter((r) => !r.tasted);
+  else if (shopState.status === 'tasted') rows = rows.filter((r) => r.tasted);
   rows.sort((a, b) => (b.val ?? -1) - (a.val ?? -1));
   $c.innerHTML = rows.map(({ c, ex, val, pred, tasted }) => {
     const last = tasted ? store.coffeeOrders(ex)[0] : null;
